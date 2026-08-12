@@ -1,0 +1,39 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Video {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  hlsPath       String   // Path to the master m3u8 playlist
+  thumbnailPath String?  // Path to the thumbnail image
+  duration      Float?   // Duration in seconds
+  createdAt     DateTime @default(now())
+  rooms         Room[]
+}
+
+model Room {
+  id            String        @id @default(uuid())
+  title         String
+  description   String?
+  isPublic      Boolean       @default(true)
+  videoId       String
+  video         Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  messages      ChatMessage[]
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  roomId     String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderName String
+  message    String
+  createdAt  DateTime @default(now())
+}
