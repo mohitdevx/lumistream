@@ -1,12 +1,17 @@
 {
   "name": "LumiStream Codespace Dev",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bullseye",
+
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
       "moby": true
+    },
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
     }
   },
+
   "customizations": {
     "vscode": {
       "extensions": [
@@ -17,8 +22,16 @@
       ]
     }
   },
-  "forwardPorts": [5000, 5173, 5432, 6379],
+
+  "forwardPorts": [
+    5000,
+    5173,
+    5432,
+    6379
+  ],
+
   "postCreateCommand": "pnpm approve-builds --all && pnpm install",
+
   "portsAttributes": {
     "5173": {
       "label": "LumiStream Web App",
