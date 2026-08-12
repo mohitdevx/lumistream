@@ -1,0 +1,16 @@
+{
+  "name": "lumistream-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter backend dev & pnpm --filter frontend dev",
+    "build": "pnpm --filter backend build && pnpm --filter frontend build",
+    "start": "pnpm --filter backend start"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines"
+    ]
+  }
+}

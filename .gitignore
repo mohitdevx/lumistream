@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+.pnpm-store
+.pnpm-debug.log
+
+# Build files
+dist
+build
+.next
+out
+
+# Local settings / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database
+prisma/migrations
+*.db
+*.db-journal
+
+# Uploaded video media (persisted locally but not tracked in repo)
+backend/uploads/*
+!backend/uploads/temp/
+
+# OS/IDE metadata
+.DS_Store
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
