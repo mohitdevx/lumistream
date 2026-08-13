@@ -286,6 +286,7 @@ interface RoomState {
   lastUpdated: number;
   hostSocketId: string | null;
   users: Array<{ socketId: string; username: string }>;
+  pendingApprovals: Array<{ socketId: string; username: string }>;
 }
 const activeRooms = new Map<string, RoomState>();
 
@@ -437,6 +438,9 @@ app.post('/api/rooms', async (req, res) => {
     if (!title || !videoId) {
       return res.status(400).json({ error: 'Title and videoId are required' });
     }
+    if (description && description.length > 100) {
+      return res.status(400).json({ error: 'Description cannot exceed 100 characters' });
+    }
 
     const room = await prisma.room.create({
       data: {
@@ -531,10 +535,6 @@ io.on('connection', (socket) => {
   // 1. Join Room
   socket.on('join-room', async ({ roomId, username }: { roomId: string; username: string }) => {
     try {
-      currentRoomId = roomId;
-      currentUsername = username;
-      socket.join(roomId);
-
       // Verify if room exists in DB
       const room = await prisma.room.findUnique({
         where: { id: roomId },
@@ -553,16 +553,45 @@ io.on('connection', (socket) => {
           isPlaying: false,
           lastUpdated: Date.now(),
           hostSocketId: socket.id, // The creator or first person joining becomes the initial host
-          users: []
+          users: [],
+          pendingApprovals: []
         });
       }
 
       const roomState = activeRooms.get(roomId)!;
+      if (!roomState.pendingApprovals) {
+        roomState.pendingApprovals = [];
+      }
       
       // Assign host if none exists
       if (!roomState.hostSocketId) {
         roomState.hostSocketId = socket.id;
       }
+
+      const isHost = roomState.hostSocketId === socket.id;
+
+      // Check private room entry admission
+      if (!room.isPublic && !isHost) {
+        if (!roomState.pendingApprovals.some(p => p.socketId === socket.id)) {
+          roomState.pendingApprovals.push({ socketId: socket.id, username });
+        }
+
+        // Notify Host
+        io.to(roomState.hostSocketId).emit('watch-request', {
+          socketId: socket.id,
+          username
+        });
+
+        // Notify viewer
+        socket.emit('approval-pending', { message: 'Waiting for Host approval...' });
+        console.log(`[Socket] Private entry request from ${username} (${socket.id}) in room ${roomId}`);
+        return;
+      }
+
+      // Allowed (is public or is host)
+      currentRoomId = roomId;
+      currentUsername = username;
+      socket.join(roomId);
 
       // Add user to room's active user list
       if (!roomState.users.some(u => u.socketId === socket.id)) {
@@ -585,7 +614,7 @@ io.on('connection', (socket) => {
       socket.emit('room-state', {
         currentTime: roomState.currentTime,
         isPlaying: roomState.isPlaying,
-        isHost: roomState.hostSocketId === socket.id,
+        isHost,
         users: roomState.users
       });
 
@@ -594,6 +623,58 @@ io.on('connection', (socket) => {
 
     } catch (err: any) {
       console.error('[Socket] Join room error:', err);
+    }
+  });
+
+  // Approve or reject pending watcher
+  socket.on('approve-viewer', ({ roomId, viewerSocketId, approved }: { roomId: string; viewerSocketId: string; approved: boolean }) => {
+    const roomState = activeRooms.get(roomId);
+    if (!roomState || roomState.hostSocketId !== socket.id) return;
+
+    if (!roomState.pendingApprovals) {
+      roomState.pendingApprovals = [];
+    }
+
+    const index = roomState.pendingApprovals.findIndex(p => p.socketId === viewerSocketId);
+    if (index === -1) return;
+
+    const viewer = roomState.pendingApprovals[index];
+    roomState.pendingApprovals.splice(index, 1);
+
+    const viewerSocket = io.sockets.sockets.get(viewerSocketId);
+
+    if (approved) {
+      if (!roomState.users.some(u => u.socketId === viewerSocketId)) {
+        roomState.users.push(viewer);
+      }
+
+      if (viewerSocket) {
+        (viewerSocket as any).currentRoomId = roomId;
+        (viewerSocket as any).currentUsername = viewer.username;
+        viewerSocket.join(roomId);
+
+        // Tell viewer they are approved and transmit current room state
+        viewerSocket.emit('join-approved', {
+          currentTime: roomState.currentTime,
+          isPlaying: roomState.isPlaying,
+          isHost: false,
+          users: roomState.users
+        });
+
+        // Broadcast user joined chat notification
+        const joinMsg = {
+          id: uuidv4(),
+          senderName: 'System',
+          message: `${viewer.username} joined the screening.`,
+          createdAt: new Date()
+        };
+        io.to(roomId).emit('new-message', joinMsg);
+        io.to(roomId).emit('room-users', roomState.users);
+      }
+    } else {
+      if (viewerSocket) {
+        viewerSocket.emit('join-rejected', { message: 'Access denied. The host has declined your request.' });
+      }
     }
   });
 
@@ -658,6 +739,19 @@ io.on('connection', (socket) => {
   // 5. Handle Disconnect
   socket.on('disconnect', () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);
+
+    // Scan rooms to remove from pendingApprovals
+    activeRooms.forEach((roomState, rId) => {
+      if (roomState.pendingApprovals) {
+        const index = roomState.pendingApprovals.findIndex(p => p.socketId === socket.id);
+        if (index !== -1) {
+          roomState.pendingApprovals.splice(index, 1);
+          if (roomState.hostSocketId) {
+            io.to(roomState.hostSocketId).emit('watch-request-cancelled', { socketId: socket.id });
+          }
+        }
+      }
+    });
 
     if (currentRoomId && activeRooms.has(currentRoomId)) {
       const roomState = activeRooms.get(currentRoomId)!;
