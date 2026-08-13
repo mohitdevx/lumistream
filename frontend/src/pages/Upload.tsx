@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Film, Loader2, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Upload, Film, Loader2, CheckCircle2, AlertTriangle, ArrowLeft, XCircle } from 'lucide-react';
 
 export const UploadVideo: React.FC = () => {
   const navigate = useNavigate();
@@ -12,7 +12,18 @@ export const UploadVideo: React.FC = () => {
   // Upload states
   const [status, setStatus] = useState<'idle' | 'uploading' | 'transcoding' | 'success' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
+  const [loadedBytes, setLoadedBytes] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -35,6 +46,8 @@ export const UploadVideo: React.FC = () => {
 
     setStatus('uploading');
     setProgress(0);
+    setLoadedBytes(0);
+    setTotalBytes(0);
     setErrorMsg(null);
 
     const formData = new FormData();
@@ -48,6 +61,8 @@ export const UploadVideo: React.FC = () => {
     // Track upload progress
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
+        setLoadedBytes(event.loaded);
+        setTotalBytes(event.total);
         const percentCompleted = Math.round((event.loaded * 100) / event.total);
         setProgress(percentCompleted);
         if (percentCompleted === 100) {
@@ -102,14 +117,9 @@ export const UploadVideo: React.FC = () => {
       </div>
 
       <div className="bg-bg-surface border border-border-main rounded-xl p-6 md:p-8">
-        {status === 'idle' || status === 'error' ? (
+        {status === 'idle' ? (
           <form onSubmit={handleUploadSubmit} className="space-y-6 text-left">
-            {status === 'error' && (
-              <div className="p-4 rounded-lg bg-red-950/40 border border-red-500/30 text-xs text-red-400 font-medium flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
+
 
             {/* Drag & Drop File Selector */}
             <div className="space-y-2">
@@ -172,80 +182,113 @@ export const UploadVideo: React.FC = () => {
             </button>
           </form>
         ) : (
-          <div className="py-12 flex flex-col items-center justify-center text-center space-y-6 animate-fade-in">
+          <div className="py-8 px-4 flex flex-col items-center justify-center text-center space-y-6 animate-fade-in">
+            {/* Header Icon */}
             {status === 'uploading' && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center text-primary relative">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                  <span className="absolute text-[10px] font-bold">{progress}%</span>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-text-main">Uploading Video File</h3>
-                  <p className="text-xs text-text-muted max-w-sm">
-                    Sending video to the server. Please do not close this window or navigate away.
-                  </p>
-                </div>
-                <div className="w-full max-w-sm bg-zinc-800 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-primary h-full transition-all duration-300 rounded-full" 
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </>
+              <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center text-primary relative">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
             )}
-
+            
             {status === 'transcoding' && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent animate-pulse">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-text-main">Transcoding into HLS</h3>
-                  <p className="text-xs text-text-muted max-w-sm">
-                    File uploaded successfully! The server is currently converting it to adaptive HLS streams (1080p, 720p, 480p) and extracting thumbnail.
-                  </p>
-                </div>
-                <div className="p-3 bg-bg-main/50 border border-border-main/50 rounded-lg text-left text-xs max-w-sm space-y-1">
-                  <p className="font-semibold text-primary">&#10003; Upload Complete</p>
-                  <p className="text-text-muted">HLS stream conversion in progress...</p>
-                  <p className="text-[10px] text-accent mt-2">You can safely leave this page now. The conversion will run in the background, and the video will appear in the library when complete.</p>
-                </div>
-                <button
-                  onClick={() => navigate('/')}
-                  className="px-6 py-2.5 rounded-lg bg-border-main hover:bg-border-active text-text-main text-xs font-semibold transition-all cursor-pointer"
-                >
-                  Return to Dashboard
-                </button>
-              </>
+              <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent animate-pulse relative">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
             )}
 
             {status === 'success' && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center text-primary">
-                  <CheckCircle2 className="w-8 h-8" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-text-main">Upload & Processing Initialized</h3>
-                  <p className="text-xs text-text-muted max-w-sm">
-                    Your video is being processed into adaptive bitrates. It will appear on your watch lists shortly.
-                  </p>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => setStatus('idle')}
-                    className="px-5 py-2.5 rounded-lg border border-border-main hover:bg-bg-card text-text-main text-xs font-semibold transition-all cursor-pointer"
-                  >
-                    Upload Another
-                  </button>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-bg-main text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Go to Dashboard
-                  </button>
-                </div>
-              </>
+              <div className="w-16 h-16 rounded-full bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
             )}
+
+            {status === 'error' && (
+              <div className="w-16 h-16 rounded-full bg-red-950/40 border border-red-500/30 flex items-center justify-center text-red-400">
+                <XCircle className="w-8 h-8" />
+              </div>
+            )}
+
+            {/* Title & Description */}
+            <div className="space-y-2 max-w-md">
+              <h3 className="text-lg font-bold text-text-main">
+                {status === 'uploading' && 'Uploading Video File'}
+                {status === 'transcoding' && 'Transcoding HLS Stream'}
+                {status === 'success' && 'Upload & Transcoding Success'}
+                {status === 'error' && 'Upload Failed'}
+              </h3>
+              
+              <p className="text-xs text-text-muted">
+                {status === 'uploading' && `Sending "${file?.name || 'video'}" to the server. Please keep this tab open.`}
+                {status === 'transcoding' && 'Video file successfully uploaded! The server is now generating the adaptive HLS streams (1080p, 720p, 480p) and extracting thumbnails.'}
+                {status === 'success' && 'Your video has been uploaded and registered successfully. It is ready for screening!'}
+                {status === 'error' && (errorMsg || 'An error occurred during the video upload process.')}
+              </p>
+            </div>
+
+            {/* Progress Bar Container */}
+            <div className="w-full max-w-md bg-bg-main border border-border-main rounded-xl p-4 space-y-3 text-left">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className={
+                  status === 'success' ? 'text-emerald-400' :
+                  status === 'error' ? 'text-red-400' :
+                  status === 'transcoding' ? 'text-accent' : 'text-primary'
+                }>
+                  {status === 'uploading' && `Uploading... ${progress}%`}
+                  {status === 'transcoding' && `Transcoding... 100%`}
+                  {status === 'success' && 'Complete'}
+                  {status === 'error' && 'Failed'}
+                </span>
+                <span className="text-text-muted">
+                  {status === 'uploading' && totalBytes > 0 && `${formatBytes(loadedBytes)} of ${formatBytes(totalBytes)}`}
+                  {(status === 'transcoding' || status === 'success') && totalBytes > 0 && `${formatBytes(totalBytes)} of ${formatBytes(totalBytes)}`}
+                  {status === 'error' && totalBytes > 0 && `${formatBytes(loadedBytes)} of ${formatBytes(totalBytes)}`}
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-zinc-800 h-2.5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 rounded-full ${
+                    status === 'success' ? 'bg-emerald-500' :
+                    status === 'error' ? 'bg-red-500' :
+                    status === 'transcoding' ? 'bg-accent animate-pulse' : 'bg-primary'
+                  }`} 
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-center space-x-3 mt-4">
+              {status === 'error' && (
+                <button
+                  onClick={() => setStatus('idle')}
+                  className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-bg-main text-xs font-bold transition-all cursor-pointer"
+                >
+                  Try Again
+                </button>
+              )}
+              {status === 'success' && (
+                <button
+                  onClick={() => setStatus('idle')}
+                  className="px-5 py-2.5 rounded-lg border border-border-main hover:bg-bg-card text-text-main text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Upload Another
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/')}
+                className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  status === 'error' 
+                    ? 'border border-border-main hover:bg-bg-card text-text-main' 
+                    : status === 'success'
+                    ? 'bg-primary text-bg-main font-bold hover:bg-primary-hover'
+                    : 'bg-border-main hover:bg-border-active text-text-main'
+                }`}
+              >
+                Return to Dashboard
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ import fs from 'fs';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import prisma from './utils/db';
 import { transcodeToHLS } from './utils/transcoder';
 
@@ -26,6 +27,122 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Helper to hash password
+function hashPassword(password: string): string {
+  const salt = 'lumistream_salt_secure_123';
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
+// --- AUTHENTICATION API ROUTES ---
+
+// Signup Route
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { firstName, lastName, username, email, password } = req.body;
+
+    if (!firstName || !username || !email || !password) {
+      return res.status(400).json({ error: 'All required fields must be filled' });
+    }
+
+    const cleanUsername = username.toLowerCase().trim();
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findUnique({
+      where: { username: cleanUsername }
+    });
+    if (existingUsername) {
+      return res.status(400).json({ error: 'Username is already taken' });
+    }
+
+    // Check if email already exists
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: cleanEmail }
+    });
+    if (existingEmail) {
+      return res.status(400).json({ error: 'Email is already registered' });
+    }
+
+    // Hash password
+    const hashedPassword = hashPassword(password);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        username: cleanUsername,
+        email: cleanEmail,
+        password: hashedPassword
+      }
+    });
+
+    res.status(201).json({
+      message: 'Signup successful',
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email
+      }
+    });
+  } catch (error: any) {
+    console.error('Signup error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Login Route
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { usernameOrEmail, password } = req.body;
+
+    if (!usernameOrEmail || !password) {
+      return res.status(400).json({ error: 'Username/Email and password are required' });
+    }
+
+    const identifier = usernameOrEmail.toLowerCase().trim();
+
+    // Find user by username or email
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: identifier },
+          { email: identifier }
+        ]
+      }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username/email or password' });
+    }
+
+    // Verify password
+    const hashedPassword = hashPassword(password);
+    if (user.password !== hashedPassword) {
+      return res.status(401).json({ error: 'Invalid username/email or password' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email
+      }
+    });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
 
 // Ensure uploads directories exist
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
@@ -62,6 +179,15 @@ interface RoomState {
 }
 const activeRooms = new Map<string, RoomState>();
 
+interface TranscodeState {
+  videoId: string;
+  title: string;
+  progress: number;
+  status: 'processing' | 'success' | 'error';
+  error?: string;
+}
+const activeTranscodes = new Map<string, TranscodeState>();
+
 // --- REST API ROUTES ---
 
 // 1. Upload Video and Transcode
@@ -91,11 +217,28 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
       }
     });
 
+    // Add to active transcodes
+    const transcodeState: TranscodeState = {
+      videoId,
+      title,
+      progress: 0,
+      status: 'processing'
+    };
+    activeTranscodes.set(videoId, transcodeState);
+    io.emit('transcode-progress', transcodeState);
+
     // Start transcoding in the background
     transcodeToHLS({
       videoPath: tempFilePath,
       outputDir,
-      videoId
+      videoId,
+      onProgress: (progress) => {
+        const state = activeTranscodes.get(videoId);
+        if (state) {
+          state.progress = progress;
+          io.emit('transcode-progress', state);
+        }
+      }
     })
       .then(async (result) => {
         // Update database with transcoded paths and duration
@@ -107,10 +250,35 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
             duration: result.duration
           }
         });
+
+        const state = activeTranscodes.get(videoId);
+        if (state) {
+          state.progress = 100;
+          state.status = 'success';
+          io.emit('transcode-progress', state);
+
+          // Keep in map for 2 minutes to show final status, then delete
+          setTimeout(() => {
+            activeTranscodes.delete(videoId);
+          }, 2 * 60 * 1000);
+        }
         console.log(`[Server] Video ${videoId} successfully transcoded.`);
       })
       .catch(async (err) => {
         console.error(`[Server] Failed transcoding video ${videoId}:`, err);
+
+        const state = activeTranscodes.get(videoId);
+        if (state) {
+          state.status = 'error';
+          state.error = err.message || 'Transcoding failed';
+          io.emit('transcode-progress', state);
+
+          // Keep in map for 5 minutes, then delete
+          setTimeout(() => {
+            activeTranscodes.delete(videoId);
+          }, 5 * 60 * 1000);
+        }
+
         // Delete video record on transcoding failure or mark error
         await prisma.video.delete({ where: { id: videoId } }).catch(() => {});
         // Also cleanup temp files
@@ -145,6 +313,11 @@ app.get('/api/videos', async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// 2b. List active transcodes
+app.get('/api/videos/transcoding', (req, res) => {
+  res.json(Array.from(activeTranscodes.values()));
 });
 
 // 3. Create a room
@@ -237,6 +410,9 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
 
 io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
+  
+  // Send list of active transcodes on connection
+  socket.emit('active-transcodes', Array.from(activeTranscodes.values()));
 
   // Track room and user profile of current socket
   let currentRoomId: string | null = null;

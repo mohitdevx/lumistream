@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Install FFmpeg for HLS transcoding
-RUN apk add --no-cache ffmpeg python3 make g++
+RUN apk add --no-cache ffmpeg python3 make g++ openssl libc6-compat
 
 WORKDIR /usr/src/app
 

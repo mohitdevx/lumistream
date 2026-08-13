@@ -204,7 +204,7 @@ export const Dashboard: React.FC = () => {
                   <div className="w-16 aspect-video bg-zinc-950 rounded overflow-hidden flex-shrink-0 relative border border-border-main/50">
                     {vid.thumbnailPath && vid.thumbnailPath !== 'processing' ? (
                       <img
-                        src={vid.thumbnailPath.startsWith('http') ? vid.thumbnailPath : `${api.getVideos ? (import.meta.env.VITE_API_URL || 'http://localhost:5000') : ''}${vid.thumbnailPath}`}
+                        src={vid.thumbnailPath.startsWith('http') ? vid.thumbnailPath : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${vid.thumbnailPath}`}
                         alt={vid.title}
                         className="w-full h-full object-cover"
                       />

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Settings, ShieldAlert } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings, ShieldAlert, MessageSquare } from 'lucide-react';
 
 interface VideoPlayerProps {
   src: string;
@@ -14,6 +14,10 @@ interface VideoPlayerProps {
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
   } | null>;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  showChat?: boolean;
+  onToggleChat?: () => void;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -22,7 +26,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPlay,
   onPause,
   onSeek,
-  playerRef
+  playerRef,
+  isFullscreen,
+  onToggleFullscreen,
+  showChat,
+  onToggleChat
 }) => {
   const videoElementRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -250,13 +258,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch((err) => {
-        console.error('Error attempting to enable fullscreen:', err);
-      });
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
     } else {
-      document.exitFullscreen();
+      if (!containerRef.current) return;
+      if (!document.fullscreenElement) {
+        containerRef.current.requestFullscreen().catch((err) => {
+          console.error('Error attempting to enable fullscreen:', err);
+        });
+      } else {
+        document.exitFullscreen();
+      }
     }
   };
 
@@ -411,9 +423,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   </div>
                 )}
 
+                {/* Chat Toggle Button */}
+                {onToggleChat && (
+                  <button
+                    onClick={onToggleChat}
+                    className={`transition-colors cursor-pointer ${
+                      showChat ? 'text-primary hover:text-primary-hover' : 'text-text-muted hover:text-text-main'
+                    }`}
+                    title={showChat ? 'Hide Chat' : 'Show Chat'}
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                  </button>
+                )}
+
                 {/* Fullscreen Button */}
-                <button onClick={toggleFullscreen} className="text-text-main hover:text-primary transition-colors">
-                  <Maximize2 className="w-5 h-5" />
+                <button onClick={toggleFullscreen} className="text-text-main hover:text-primary transition-colors cursor-pointer" title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}>
+                  {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                 </button>
               </div>
             </div>

@@ -6,6 +6,7 @@ interface TranscodeOptions {
   videoPath: string;
   outputDir: string;
   videoId: string;
+  onProgress?: (progress: number) => void;
 }
 
 export interface TranscodeResult {
@@ -45,100 +46,125 @@ export function extractThumbnail(videoPath: string, outputDir: string): Promise<
   });
 }
 
-export function transcodeToHLS({ videoPath, outputDir, videoId }: TranscodeOptions): Promise<TranscodeResult> {
+export function transcodeToHLS({ videoPath, outputDir, videoId, onProgress }: TranscodeOptions): Promise<TranscodeResult> {
   return new Promise(async (resolve, reject) => {
     try {
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      console.log(`[Transcoder] Starting transcoding for video: ${videoId}`);
+      console.log(`[Transcoder] Starting optimized single-pass transcoding for video: ${videoId}`);
       const duration = await getDuration(videoPath);
       const thumbnailPath = await extractThumbnail(videoPath, outputDir);
 
-      // We will transcode into 3 qualities: 480p (low), 720p (medium), 1080p (high)
-      // To run it efficiently, we'll do them sequentially or in a combined command.
-      // Let's implement HLS generation for three resolutions using fluent-ffmpeg.
-      
-      const qualities = [
-        { name: '480p', resolution: '854x480', videoBitrate: '1000k', audioBitrate: '96k' },
-        { name: '720p', resolution: '1280x720', videoBitrate: '2500k', audioBitrate: '128k' },
-        { name: '1080p', resolution: '1920x1080', videoBitrate: '5000k', audioBitrate: '192k' }
-      ];
+      // Initialize complex filter graph to split and scale the video stream only once
+      const command = ffmpeg(videoPath)
+        .complexFilter([
+          '[0:v]split=3[v1][v2][v3]',
+          '[v1]scale=854:480[v1out]',
+          '[v2]scale=1280:720[v2out]',
+          '[v3]scale=1920:1080[v3out]'
+        ]);
 
-      // Array to keep track of successful streams to write in master playlist
-      const playlistTracks: string[] = [];
+      // 1. 480p representation
+      command.output(path.join(outputDir, '480p.m3u8'))
+        .map('[v1out]')
+        .videoCodec('libx264')
+        .videoBitrate('1000k')
+        .audioCodec('aac')
+        .audioBitrate('96k')
+        .outputOptions([
+          '-map 0:a?',
+          '-hls_time 6',
+          '-hls_playlist_type vod',
+          `-hls_segment_filename ${path.join(outputDir, '480p_%03d.ts')}`,
+          '-g 48',
+          '-sc_threshold 0',
+          '-preset ultrafast',
+          '-threads 0'
+        ]);
 
-      for (const q of qualities) {
-        console.log(`[Transcoder] Transcoding ${q.name} representation...`);
-        const playlistName = `${q.name}.m3u8`;
-        const segmentPattern = `${q.name}_%03d.ts`;
+      // 2. 720p representation
+      command.output(path.join(outputDir, '720p.m3u8'))
+        .map('[v2out]')
+        .videoCodec('libx264')
+        .videoBitrate('2500k')
+        .audioCodec('aac')
+        .audioBitrate('128k')
+        .outputOptions([
+          '-map 0:a?',
+          '-hls_time 6',
+          '-hls_playlist_type vod',
+          `-hls_segment_filename ${path.join(outputDir, '720p_%03d.ts')}`,
+          '-g 48',
+          '-sc_threshold 0',
+          '-preset ultrafast',
+          '-threads 0'
+        ]);
 
-        await new Promise<void>((resTrans, rejTrans) => {
-          ffmpeg(videoPath)
-            .size(q.resolution)
-            .videoCodec('libx264')
-            .videoBitrate(q.videoBitrate)
-            .audioCodec('aac')
-            .audioBitrate(q.audioBitrate)
-            .outputOptions([
-              '-hls_time 6',                   // 6 second segment duration
-              '-hls_playlist_type vod',         // VOD playlist
-              `-hls_segment_filename ${path.join(outputDir, segmentPattern)}`,
-              '-g 48',                         // Keyframe interval (GOP size)
-              '-sc_threshold 0'                // Disable scene change detection to force keyframes
-            ])
-            .output(path.join(outputDir, playlistName))
-            .on('end', () => {
-              console.log(`[Transcoder] Finished ${q.name} stream`);
-              playlistTracks.push(q.name);
-              resTrans();
-            })
-            .on('error', (err) => {
-              console.error(`[Transcoder] Error during ${q.name} transcoding:`, err);
-              // We'll skip this quality but try others (or propagate error if all fail)
-              resTrans();
-            })
-            .run();
-        });
-      }
+      // 3. 1080p representation
+      command.output(path.join(outputDir, '1080p.m3u8'))
+        .map('[v3out]')
+        .videoCodec('libx264')
+        .videoBitrate('5000k')
+        .audioCodec('aac')
+        .audioBitrate('192k')
+        .outputOptions([
+          '-map 0:a?',
+          '-hls_time 6',
+          '-hls_playlist_type vod',
+          `-hls_segment_filename ${path.join(outputDir, '1080p_%03d.ts')}`,
+          '-g 48',
+          '-sc_threshold 0',
+          '-preset ultrafast',
+          '-threads 0'
+        ]);
 
-      if (playlistTracks.length === 0) {
-        return reject(new Error('Failed to transcode any video representations.'));
-      }
-
-      // Generate the master playlist file (master.m3u8)
-      const masterPlaylistContent = [
-        '#EXTM3U',
-        '#EXT-X-VERSION:3',
-        ...qualities
-          .filter(q => playlistTracks.includes(q.name))
-          .map(q => {
-            let bandwidth = 1200000; // default for 480p
-            let resolution = q.resolution;
-            if (q.name === '720p') bandwidth = 2800000;
-            if (q.name === '1080p') bandwidth = 5400000;
-            return `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},RESOLUTION=${resolution}\n${q.name}.m3u8`;
-          })
-      ].join('\n');
-
-      const masterPlaylistPath = path.join(outputDir, 'master.m3u8');
-      fs.writeFileSync(masterPlaylistPath, masterPlaylistContent);
-      console.log(`[Transcoder] Generated master playlist at ${masterPlaylistPath}`);
-
-      // Delete the original uploaded file to save disk space
-      try {
-        fs.unlinkSync(videoPath);
-        console.log(`[Transcoder] Cleaned up original upload: ${videoPath}`);
-      } catch (err) {
-        console.error(`[Transcoder] Error cleaning up original file ${videoPath}:`, err);
-      }
-
-      resolve({
-        hlsPath: `/uploads/${videoId}/master.m3u8`,
-        thumbnailPath,
-        duration
+      // Handle real-time progress callbacks
+      command.on('progress', (progressInfo) => {
+        if (onProgress && progressInfo.percent) {
+          onProgress(Math.min(Math.round(progressInfo.percent), 99));
+        }
       });
+
+      command.on('end', () => {
+        console.log(`[Transcoder] Finished optimized multi-representation stream generation.`);
+
+        // Generate master playlist index
+        const masterPlaylistContent = [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=854x480\n480p.m3u8',
+          '#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720\n720p.m3u8',
+          '#EXT-X-STREAM-INF:BANDWIDTH=5400000,RESOLUTION=1920x1080\n1080p.m3u8'
+        ].join('\n');
+
+        const masterPlaylistPath = path.join(outputDir, 'master.m3u8');
+        fs.writeFileSync(masterPlaylistPath, masterPlaylistContent);
+        console.log(`[Transcoder] Generated master playlist at ${masterPlaylistPath}`);
+
+        // Cleanup original file to free disk space
+        try {
+          fs.unlinkSync(videoPath);
+          console.log(`[Transcoder] Cleaned up original uploaded file: ${videoPath}`);
+        } catch (err) {
+          console.error(`[Transcoder] Error cleaning up original file ${videoPath}:`, err);
+        }
+
+        resolve({
+          hlsPath: `/uploads/${videoId}/master.m3u8`,
+          thumbnailPath,
+          duration
+        });
+      });
+
+      command.on('error', (err) => {
+        console.error(`[Transcoder] Error during single-pass transcoding:`, err);
+        reject(err);
+      });
+
+      // Launch the optimized command
+      command.run();
     } catch (error) {
       reject(error);
     }

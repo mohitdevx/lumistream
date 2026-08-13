@@ -15,9 +15,27 @@ export const Watchroom: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Username overlay input state
-  const [username, setUsername] = useState(() => localStorage.getItem('watchroom_username') || '');
+  const [username, setUsername] = useState(() => {
+    const userJson = localStorage.getItem('user');
+    if (userJson) {
+      try {
+        const u = JSON.parse(userJson);
+        if (u && u.username) return u.username;
+      } catch {}
+    }
+    return localStorage.getItem('watchroom_username') || '';
+  });
   const [tempUsername, setTempUsername] = useState('');
-  const [isUsernameSet, setIsUsernameSet] = useState(!!localStorage.getItem('watchroom_username'));
+  const [isUsernameSet, setIsUsernameSet] = useState(() => {
+    const userJson = localStorage.getItem('user');
+    if (userJson) {
+      try {
+        const u = JSON.parse(userJson);
+        if (u && u.username) return true;
+      } catch {}
+    }
+    return !!localStorage.getItem('watchroom_username');
+  });
 
   // Socket state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -37,6 +55,36 @@ export const Watchroom: React.FC = () => {
 
   // Host periodic sync heartbeat
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fullscreen and chat toggle state
+  const [showChat, setShowChat] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const handleToggleFullscreen = () => {
+    if (!workspaceRef.current) return;
+    if (!document.fullscreenElement) {
+      workspaceRef.current.requestFullscreen().catch((err) => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const handleToggleChat = () => {
+    setShowChat(prev => !prev);
+  };
 
   // 1. Fetch Room Data
   useEffect(() => {
@@ -338,11 +386,21 @@ export const Watchroom: React.FC = () => {
         </div>
       </div>
 
-      {/* Watchroom Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* Left Side: Video Player (occupies 2/3 space) */}
-        <div className="lg:col-span-2 space-y-4">
+      {/* Watchroom Workspace Wrapper */}
+      <div
+        ref={workspaceRef}
+        className={`w-full overflow-hidden transition-all duration-300 ${
+          isFullscreen
+            ? 'fixed inset-0 z-50 bg-black flex flex-col md:flex-row'
+            : 'grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch'
+        }`}
+      >
+        {/* Left Side: Video Player */}
+        <div className={`transition-all duration-300 ${
+          isFullscreen
+            ? 'flex-1 h-full relative'
+            : 'lg:col-span-2 space-y-4'
+        }`}>
           <VideoPlayer
             src={room.video.hlsPath}
             isHost={isHost}
@@ -350,48 +408,64 @@ export const Watchroom: React.FC = () => {
             onPause={handleHostPause}
             onSeek={handleHostSeek}
             playerRef={playerControlRef}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={handleToggleFullscreen}
+            showChat={showChat}
+            onToggleChat={handleToggleChat}
           />
           
-          {/* Room details */}
-          <div className="bg-bg-surface border border-border-main rounded-xl p-5 text-left space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-text-main">Room Info</h3>
-              <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
-                {room.description || 'No description set for this room.'}
-              </p>
-            </div>
-            
-            {/* Divider */}
-            <div className="border-t border-border-main/50" />
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs text-text-muted">
+          {/* Room details - only visible when not fullscreen */}
+          {!isFullscreen && (
+            <div className="bg-bg-surface border border-border-main rounded-xl p-5 text-left space-y-4">
               <div>
-                <p className="font-semibold text-text-main flex items-center space-x-1 mb-1">
-                  <Users className="w-3.5 h-3.5 text-primary" />
-                  <span>Room Size</span>
+                <h3 className="text-sm font-bold text-text-main">Room Info</h3>
+                <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
+                  {room.description || 'No description set for this room.'}
                 </p>
-                <p>{users.length} participants</p>
               </div>
-              <div>
-                <p className="font-semibold text-text-main flex items-center space-x-1 mb-1">
-                  <Calendar className="w-3.5 h-3.5 text-accent" />
-                  <span>Hosted On</span>
-                </p>
-                <p>{new Date(room.createdAt).toLocaleDateString()}</p>
+              
+              {/* Divider */}
+              <div className="border-t border-border-main/50" />
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs text-text-muted">
+                <div>
+                  <p className="font-semibold text-text-main flex items-center space-x-1 mb-1">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span>Room Size</span>
+                  </p>
+                  <p>{users.length} participants</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-text-main flex items-center space-x-1 mb-1">
+                    <Calendar className="w-3.5 h-3.5 text-accent" />
+                    <span>Hosted On</span>
+                  </p>
+                  <p>{new Date(room.createdAt).toLocaleDateString()}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Side: Chat System (occupies 1/3 space) */}
-        <div>
-          <ChatBox
-            messages={messages}
-            users={users}
-            username={username}
-            onSendMessage={handleSendMessage}
-          />
-        </div>
+        {/* Right Side: Chat System */}
+        {showChat && (
+          <div className={`transition-all duration-300 ${
+            isFullscreen
+              ? 'absolute top-0 right-0 h-full w-80 sm:w-96 z-30'
+              : 'relative h-full min-h-[500px]'
+          }`}>
+            <div className={isFullscreen ? 'h-full w-full' : 'absolute inset-0 flex flex-col'}>
+              <ChatBox
+                messages={messages}
+                users={users}
+                username={username}
+                onSendMessage={handleSendMessage}
+                onClose={isFullscreen ? handleToggleChat : undefined}
+                isFullscreen={isFullscreen}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
