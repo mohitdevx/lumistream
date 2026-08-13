@@ -46,5 +46,11 @@ model User {
   username  String   @unique
   email     String   @unique
   password  String
+  bio       String?
+  facebook  String?
+  twitter   String?
+  github    String?
+  instagram String?
+  website   String?
   createdAt DateTime @default(now())
 }

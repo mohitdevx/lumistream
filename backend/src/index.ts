@@ -135,12 +135,122 @@ app.post('/api/auth/login', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,
-        email: user.email
+        email: user.email,
+        bio: user.bio,
+        facebook: user.facebook,
+        twitter: user.twitter,
+        github: user.github,
+        instagram: user.instagram,
+        website: user.website
       }
     });
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Get User Profile Details
+app.get('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        bio: user.bio,
+        facebook: user.facebook,
+        twitter: user.twitter,
+        github: user.github,
+        instagram: user.instagram,
+        website: user.website,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// Update User Profile
+app.put('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { firstName, lastName, bio, facebook, twitter, github, instagram, website } = req.body;
+    if (!firstName) {
+      return res.status(400).json({ error: 'First name is required' });
+    }
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName,
+        lastName: lastName || null,
+        bio: bio || null,
+        facebook: facebook || null,
+        twitter: twitter || null,
+        github: github || null,
+        instagram: instagram || null,
+        website: website || null
+      }
+    });
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updated.id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        username: updated.username,
+        email: updated.email,
+        bio: updated.bio,
+        facebook: updated.facebook,
+        twitter: updated.twitter,
+        github: updated.github,
+        instagram: updated.instagram,
+        website: updated.website
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// Change Password
+app.put('/api/users/:userId/password', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    // Verify current password
+    if (user.password !== hashPassword(currentPassword)) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+    // Update to new password
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashPassword(newPassword)
+      }
+    });
+    res.json({ message: 'Password updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
