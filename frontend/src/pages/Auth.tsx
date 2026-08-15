@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Film, User, Mail, Lock, Loader2, ArrowRight, CheckCircle2, UserCheck, AlertTriangle } from 'lucide-react';
+import { Film, User, Mail, Lock, Loader2, ArrowRight, CheckCircle2, UserCheck, AlertTriangle, Tv, MessageSquare, Sparkles, Zap, Share2 } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup';
 
@@ -172,212 +172,252 @@ export const Auth: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-bg-main text-text-main flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background ambient glows */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-accent/5 blur-[120px] pointer-events-none" />
+    <div className="min-h-screen w-screen overflow-x-hidden overflow-y-auto bg-bg-main text-text-main flex flex-col items-center justify-between p-6 relative select-none">
+      {/* Subtle grid background to keep depth, but muted */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f23_1px,transparent_1px),linear-gradient(to_bottom,#1f1f23_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none opacity-40" />
 
-      {/* Auth Box Container */}
-      <div className="max-w-md w-full space-y-6 relative z-10 animate-fade-in">
-        {/* Logo Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center space-x-2 text-2xl font-black tracking-tight text-glow text-primary">
-            <Film className="w-7 h-7 text-primary" />
-            <span>LumiStream</span>
-          </div>
-          <p className="text-xs text-text-muted">
-            Aesthetic Synchronized Cinema for Friends
-          </p>
+      {/* Header bar */}
+      <header className="w-full max-w-6xl flex items-center justify-between py-2 relative z-10">
+        <div className="flex items-center space-x-2 text-base font-semibold text-text-main">
+          <Film className="w-5 h-5 text-primary" />
+          <span className="tracking-tight">LumiStream</span>
         </div>
+      </header>
 
-        {/* Card Body */}
-        <div className="bg-bg-surface border border-border-main rounded-2xl p-6 md:p-8 shadow-2xl relative">
-          {/* Tabs */}
-          <div className="flex bg-bg-main p-1 rounded-xl border border-border-main/50 mb-6">
-            <button
-              onClick={() => handleModeSwitch('login')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                mode === 'login'
-                  ? 'bg-bg-surface text-primary shadow-sm border border-border-main/30'
-                  : 'text-text-muted hover:text-text-main'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => handleModeSwitch('signup')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                mode === 'signup'
-                  ? 'bg-bg-surface text-primary shadow-sm border border-border-main/30'
-                  : 'text-text-muted hover:text-text-main'
-              }`}
-            >
-              Register
-            </button>
+      {/* Main hero & auth forms area */}
+      <main className="w-full max-w-6xl flex-1 flex flex-col justify-center py-4 relative z-10">
+        <div className="w-full flex flex-col lg:flex-row items-start justify-between gap-12 lg:gap-16 py-6">
+          {/* Left Column: Hero Text */}
+          <div className="flex-1 text-left space-y-4 max-w-xl lg:pt-10">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-white leading-[1.1]">
+              Watch videos together. <br />
+              Synchronized perfectly.
+            </h1>
+            <p className="text-sm sm:text-base text-text-muted leading-relaxed">
+              Create high-performance synchronized rooms for your video files. Share a link, manage playback as host, and chat with friends in real-time. Zero lag, zero configuration.
+            </p>
           </div>
 
-          {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-500/20 text-xs text-red-400 font-medium flex items-start space-x-2.5 mb-5 animate-shake">
-              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>{errorMsg}</span>
+          {/* Right Column: Auth form card */}
+          <div className={`w-full max-w-md bg-zinc-900/40 border border-zinc-800/85 rounded-xl p-6 sm:p-8 shadow-xl backdrop-blur-md transition-all duration-500 ease-in-out overflow-hidden ${
+            mode === 'login' ? 'max-h-[380px] sm:max-h-[400px]' : 'max-h-[550px] sm:max-h-[575px]'
+          }`}>
+            {/* Custom Minimal tab headers */}
+            <div className="flex border-b border-zinc-800/80 mb-6 pb-0.5 space-x-6">
+              <button
+                onClick={() => handleModeSwitch('login')}
+                className={`pb-2.5 text-xs font-semibold tracking-tight transition-all relative cursor-pointer ${
+                  mode === 'login' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Sign In
+                {mode === 'login' && (
+                  <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-primary rounded-full" />
+                )}
+              </button>
+              <button
+                onClick={() => handleModeSwitch('signup')}
+                className={`pb-2.5 text-xs font-semibold tracking-tight transition-all relative cursor-pointer ${
+                  mode === 'signup' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Create Account
+                {mode === 'signup' && (
+                  <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-primary rounded-full" />
+                )}
+              </button>
             </div>
-          )}
 
-          {mode === 'login' ? (
-            /* Login Form */
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-text-muted">Username or Email</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-text-muted">
-                    <User className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your username or email"
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl pl-10 pr-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
+            {errorMsg && (
+              <div className="p-3 rounded-lg bg-red-950/20 border border-red-500/25 text-xs text-red-400 font-medium flex items-start space-x-2 mb-4 animate-shake">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <div className="relative">
+              {/* Login Form */}
+              <div className={`transition-all duration-500 ease-in-out ${
+                mode === 'login' 
+                  ? 'opacity-100 translate-y-0' 
+                  : 'opacity-0 -translate-y-4 pointer-events-none absolute inset-x-0 top-0'
+              }`}>
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-medium text-zinc-400">Username or Email</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="name@example.com"
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-medium text-zinc-400">Password</label>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full mt-2 py-2.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Sign In</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
 
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-text-muted">Password</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-text-muted">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl pl-10 pr-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
+              {/* Signup Form */}
+              <div className={`transition-all duration-500 ease-in-out ${
+                mode === 'signup' 
+                  ? 'opacity-100 translate-y-0' 
+                  : 'opacity-0 translate-y-4 pointer-events-none absolute inset-x-0 top-0'
+              }`}>
+                <form onSubmit={handleSignupSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[11px] font-medium text-zinc-400">First Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Jane"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[11px] font-medium text-zinc-400">Last Name <span className="text-[9px] text-zinc-500 font-normal">(Opt)</span></label>
+                      <input
+                        type="text"
+                        placeholder="Doe"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-medium text-zinc-400">Username</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="janedoe"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-medium text-zinc-400">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="jane@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-medium text-zinc-400">Password</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Minimum 6 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-750 focus:ring-1 focus:ring-zinc-700 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full mt-2 py-2.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Creating account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Register Account</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 rounded-xl bg-primary hover:bg-primary-hover disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-bg-main text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-lg shadow-primary/10"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Signing in...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            /* Signup Form */
-            <form onSubmit={handleSignupSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3.5">
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold text-text-muted">First Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="First Name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl px-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold text-text-muted">Last Name <span className="text-[10px] text-text-muted/65 font-normal">(Opt)</span></label>
-                  <input
-                    type="text"
-                    placeholder="Last Name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl px-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-text-muted">Username <span className="text-[10px] text-primary/70 font-bold">(Unique)</span></label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-text-muted">
-                    <UserCheck className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="choose_username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl pl-10 pr-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-text-muted">Email Address</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-text-muted">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl pl-10 pr-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-text-muted">Password</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-text-muted">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Create a strong password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-bg-main border border-border-main focus:border-primary rounded-xl pl-10 pr-4 py-3 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 rounded-xl bg-primary hover:bg-primary-hover disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-bg-main text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-lg shadow-primary/10"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Creating account...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Register Account</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+          </div>
         </div>
-      </div>
+
+        {/* Feature Grid Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl w-full pt-8 border-t border-zinc-900 mt-8 text-left">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Zap className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">Zero Drift Sync</h3>
+            </div>
+            <p className="text-xs text-text-muted leading-relaxed">
+              Continuous background time alignment ensuring all viewers match host playback. Drift correction handles lag in under 2 seconds.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Tv className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">Host Control</h3>
+            </div>
+            <p className="text-xs text-text-muted leading-relaxed">
+              Designated hosts manage video events (play, pause, seek), instantly syncing settings to everyone in the room.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">Integrated Chat</h3>
+            </div>
+            <p className="text-xs text-text-muted leading-relaxed">
+              Real-time message threads and active participant counts built right next to the screening room with no extra tools needed.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer bar */}
+      <footer className="w-full max-w-6xl border-t border-zinc-900 py-4 text-center text-[10px] text-text-muted relative z-10">
+        <p>&copy; {new Date().getFullYear()} LumiStream. Aesthetic Synchronized Video Streaming.</p>
+      </footer>
     </div>
   );
 };
