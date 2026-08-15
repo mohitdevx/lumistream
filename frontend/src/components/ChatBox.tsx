@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Users, MessageSquare, Crown } from 'lucide-react';
+import { Send, Users, MessageSquare, Crown, Smile } from 'lucide-react';
 import { ChatMessage } from '../utils/api';
 
 interface ChatBoxProps {
@@ -204,20 +204,35 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
       {/* Input Form */}
       {activeTab === 'chat' && (
-        <form onSubmit={handleSend} className="p-3 bg-bg-main/30 border-t border-border-main/50 flex items-center space-x-2">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            className="flex-1 bg-bg-main border border-border-main/80 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-xl px-4 py-2.5 text-xs text-text-main placeholder-text-muted outline-none transition-all"
-          />
-          <button
-            type="submit"
-            className="p-2.5 rounded-xl bg-primary hover:bg-primary-hover text-bg-main flex items-center justify-center transition-all cursor-pointer shadow-lg shadow-primary/10"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+        <form onSubmit={handleSend} className="p-3.5 bg-bg-main/30 border-t border-border-main/50 flex flex-col space-y-2">
+          <div className="flex items-center bg-bg-card/40 backdrop-blur-md border border-border-main/70 rounded-2xl p-1.5 transition-all duration-300 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15 focus-within:bg-bg-card/65 focus-within:shadow-[0_0_15px_rgba(16,185,129,0.07)]">
+            <button
+              type="button"
+              className="p-2 rounded-xl text-text-muted hover:text-primary transition-all duration-200 hover:bg-bg-surface/50 cursor-pointer"
+              title="Add Emoji"
+              onClick={() => setInputText(prev => prev + '😊')}
+            >
+              <Smile className="w-4 h-4" />
+            </button>
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              className="flex-1 bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:border-transparent px-2.5 py-2 text-xs text-text-main placeholder-text-muted/60"
+            />
+            <button
+              type="submit"
+              disabled={!inputText.trim()}
+              className={`p-2.5 rounded-xl flex items-center justify-center transition-all duration-300 shadow-md ${
+                inputText.trim()
+                  ? 'bg-primary hover:bg-primary-hover text-bg-main cursor-pointer hover:scale-105 active:scale-95 shadow-primary/20'
+                  : 'bg-border-main/40 text-text-muted/40 cursor-not-allowed shadow-none'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </form>
       )}
     </div>
