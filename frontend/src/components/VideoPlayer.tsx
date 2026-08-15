@@ -13,6 +13,7 @@ interface VideoPlayerProps {
     pause: () => void;
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
+    setSpeed?: (speed: number) => void;
   } | null>;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
@@ -20,12 +21,13 @@ interface VideoPlayerProps {
   onToggleChat?: () => void;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+export const VideoPlayer: React.FC<VideoPlayerProps & { onSpeedChange?: (speed: number) => void }> = ({
   src,
   isHost,
   onPlay,
   onPause,
   onSeek,
+  onSpeedChange,
   playerRef,
   isFullscreen,
   onToggleFullscreen,
@@ -43,8 +45,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [levels, setLevels] = useState<{ id: number; height: number }[]>([]);
   const [currentLevel, setCurrentLevel] = useState(-1); // -1 = Auto
+  const [activeLevelHeight, setActiveLevelHeight] = useState<number | null>(null);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingRef = useRef(false); // Guard flag to prevent event loops
@@ -74,6 +81,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           isSyncingRef.current = true;
           videoElementRef.current.currentTime = time;
           setCurrentTime(time);
+        }
+      },
+      setSpeed: (speed: number) => {
+        if (videoElementRef.current) {
+          videoElementRef.current.playbackRate = speed;
+          setPlaybackSpeed(speed);
         }
       },
       getCurrentTime: () => {
@@ -108,6 +121,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }));
         setLevels(qualityLevels);
         setErrorMsg(null);
+
+        if (hls && hls.currentLevel !== -1) {
+          setActiveLevelHeight(hls.levels[hls.currentLevel]?.height || null);
+        } else if (hls && hls.autoLevelEnabled) {
+          setActiveLevelHeight(hls.levels[hls.loadLevel]?.height || null);
+        }
+      });
+
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        const activeIdx = data.level;
+        if (hls && hls.levels[activeIdx]) {
+          setActiveLevelHeight(hls.levels[activeIdx].height);
+        }
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -279,8 +305,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (hls) {
       hls.currentLevel = levelId;
       setCurrentLevel(levelId);
+      if (levelId !== -1 && hls.levels[levelId]) {
+        setActiveLevelHeight(hls.levels[levelId].height);
+      }
     }
     setShowQualityMenu(false);
+  };
+
+  const changeSpeed = (speed: number) => {
+    if (!isHost) return;
+    if (videoElementRef.current) {
+      videoElementRef.current.playbackRate = speed;
+      setPlaybackSpeed(speed);
+      if (onSpeedChange) {
+        onSpeedChange(speed);
+      }
+    }
+    setShowSpeedMenu(false);
   };
 
   const formatTime = (secs: number) => {
@@ -385,37 +426,86 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4 relative">
+              <div className="flex items-center space-x-3.5 relative">
+                {/* Playback Speed Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      if (!isHost) return;
+                      setShowSpeedMenu(!showSpeedMenu);
+                      setShowQualityMenu(false);
+                    }}
+                    disabled={!isHost}
+                    className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center space-x-1 transition-all ${
+                      isHost 
+                        ? 'border-border-main hover:border-primary text-text-muted hover:text-text-main cursor-pointer' 
+                        : 'border-zinc-800 text-zinc-600 cursor-not-allowed'
+                    }`}
+                    title={isHost ? "Change Playback Speed" : `Playback Speed: ${playbackSpeed === 1.0 ? 'Normal' : playbackSpeed + 'x'}`}
+                  >
+                    <span>{playbackSpeed === 1.0 ? '1x' : `${playbackSpeed}x`}</span>
+                  </button>
+
+                  {showSpeedMenu && isHost && (
+                    <div className="absolute bottom-10 right-0 z-30 bg-bg-surface border border-border-main rounded-lg py-1.5 w-24 shadow-xl">
+                      {speeds.map((speed) => (
+                        <button
+                          key={speed}
+                          type="button"
+                          onClick={() => changeSpeed(speed)}
+                          className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-border-main/50 flex items-center justify-between cursor-pointer ${
+                            playbackSpeed === speed ? 'text-primary font-bold' : 'text-text-main'
+                          }`}
+                        >
+                          <span>{speed === 1.0 ? 'Normal' : `${speed}x`}</span>
+                          {playbackSpeed === speed && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Quality Selector */}
                 {levels.length > 0 && (
-                  <div>
+                  <div className="relative">
                     <button
-                      onClick={() => setShowQualityMenu(!showQualityMenu)}
-                      className="p-1.5 rounded-lg border border-border-main hover:border-primary text-text-muted hover:text-text-main text-xs font-semibold flex items-center space-x-1 transition-all"
+                      onClick={() => {
+                        setShowQualityMenu(!showQualityMenu);
+                        setShowSpeedMenu(false);
+                      }}
+                      className="p-1.5 rounded-lg border border-border-main hover:border-primary text-text-muted hover:text-text-main text-xs font-semibold flex items-center space-x-1 transition-all cursor-pointer"
                     >
-                      <Settings className="w-4 h-4 animate-spin-slow" />
-                      <span>{currentLevel === -1 ? 'Auto' : `${levels[currentLevel]?.height}p`}</span>
+                      <Settings className="w-4 h-4" />
+                      <span>{currentLevel === -1 ? `Auto ${activeLevelHeight ? '(' + activeLevelHeight + 'p)' : ''}` : `${levels[currentLevel]?.height}p`}</span>
                     </button>
 
                     {showQualityMenu && (
-                      <div className="absolute bottom-10 right-10 z-30 bg-bg-surface border border-border-main rounded-lg py-1.5 w-32 shadow-xl">
+                      <div className="absolute bottom-10 right-0 z-30 bg-bg-surface border border-border-main rounded-lg py-1.5 w-32 shadow-xl">
                         <button
                           onClick={() => changeQuality(-1)}
-                          className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-border-main/50 ${
+                          className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-border-main/50 flex items-center justify-between cursor-pointer ${
                             currentLevel === -1 ? 'text-primary font-bold' : 'text-text-main'
                           }`}
                         >
-                          Auto
+                          <span>Auto</span>
+                          {currentLevel === -1 && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          )}
                         </button>
                         {levels.map((lvl) => (
                           <button
                             key={lvl.id}
                             onClick={() => changeQuality(lvl.id)}
-                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-border-main/50 ${
+                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-border-main/50 flex items-center justify-between cursor-pointer ${
                               currentLevel === lvl.id ? 'text-primary font-bold' : 'text-text-main'
                             }`}
                           >
-                            {lvl.height}p
+                            <span>{lvl.height}p</span>
+                            {currentLevel === lvl.id && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                            )}
                           </button>
                         ))}
                       </div>

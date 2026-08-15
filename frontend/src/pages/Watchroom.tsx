@@ -156,11 +156,11 @@ export const Watchroom: React.FC = () => {
     });
 
     // Handle Host play/pause/seek controls
-    socket.on('player-control', (data: { action: 'play' | 'pause' | 'seek'; currentTime: number; senderId: string }) => {
+    socket.on('player-control', (data: { action: 'play' | 'pause' | 'seek' | 'speed'; currentTime: number; speed?: number; senderId: string }) => {
       if (!playerControlRef.current || isHost) return;
 
       const player = playerControlRef.current;
-      console.log(`[Socket] Received play-control action: ${data.action} at ${data.currentTime}`);
+      console.log(`[Socket] Received play-control action: ${data.action} at ${data.currentTime}s (speed: ${data.speed})`);
 
       if (data.action === 'play') {
         player.seekTo(data.currentTime);
@@ -170,14 +170,24 @@ export const Watchroom: React.FC = () => {
         player.seekTo(data.currentTime);
       } else if (data.action === 'seek') {
         player.seekTo(data.currentTime);
+      } else if (data.action === 'speed' && data.speed !== undefined) {
+        if ((player as any).setSpeed) {
+          (player as any).setSpeed(data.speed);
+        }
       }
     });
 
     // Handle periodic host time synchronization
-    socket.on('player-sync', (data: { currentTime: number; isPlaying: boolean }) => {
+    socket.on('player-sync', (data: { currentTime: number; isPlaying: boolean; speed?: number }) => {
       if (!playerControlRef.current || isHost) return;
 
       const player = playerControlRef.current;
+      
+      // Update playback speed if it differs
+      if (data.speed !== undefined && (player as any).setSpeed) {
+        (player as any).setSpeed(data.speed);
+      }
+
       const localTime = player.getCurrentTime();
       const difference = Math.abs(localTime - data.currentTime);
 
@@ -230,11 +240,13 @@ export const Watchroom: React.FC = () => {
         // or check if it's changing. We will just pass the current local timestamp
         const video = document.querySelector('video') as HTMLVideoElement | null;
         const isPlaying = video ? !video.paused : false;
+        const speed = video ? video.playbackRate : 1.0;
 
         socket.emit('player-sync', {
           roomId,
           currentTime,
-          isPlaying
+          isPlaying,
+          speed
         });
       }
     }, 2000);
@@ -260,6 +272,12 @@ export const Watchroom: React.FC = () => {
   const handleHostSeek = (time: number) => {
     if (!isHost || !roomId) return;
     socket.emit('player-control', { roomId, action: 'seek', currentTime: time });
+  };
+
+  const handleHostSpeedChange = (speed: number) => {
+    if (!isHost || !roomId) return;
+    const currentTime = playerControlRef.current?.getCurrentTime() || 0;
+    socket.emit('player-control', { roomId, action: 'speed', currentTime, speed });
   };
 
   // --- Chat action ---
@@ -432,6 +450,7 @@ export const Watchroom: React.FC = () => {
             onPlay={handleHostPlay}
             onPause={handleHostPause}
             onSeek={handleHostSeek}
+            onSpeedChange={handleHostSpeedChange}
             playerRef={playerControlRef}
             isFullscreen={isFullscreen}
             onToggleFullscreen={handleToggleFullscreen}
