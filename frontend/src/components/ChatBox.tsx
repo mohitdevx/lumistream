@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Users, MessageSquare, Crown, Smile } from 'lucide-react';
+import { Send, Users, MessageSquare, Crown, Smile, UserCheck } from 'lucide-react';
 import { ChatMessage } from '../utils/api';
 
 interface ChatBoxProps {
@@ -10,6 +10,9 @@ interface ChatBoxProps {
   // Optional prop to support closing chat in overlays
   onClose?: () => void;
   isFullscreen?: boolean;
+  isHost?: boolean;
+  pendingApprovals?: Array<{ socketId: string; username: string }>;
+  onApproveViewer?: (socketId: string, approved: boolean) => void;
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = ({
@@ -18,10 +21,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   username,
   onSendMessage,
   onClose,
-  isFullscreen
+  isFullscreen,
+  isHost = false,
+  pendingApprovals = [],
+  onApproveViewer
 }) => {
   const [inputText, setInputText] = useState('');
-  const [activeTab, setActiveTab] = useState<'chat' | 'watchers'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'watchers' | 'requests'>('chat');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll to bottom of chat
@@ -45,7 +51,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     }
   };
 
-  // Generate a consistent HSL color based on username for avatar backgrounds
   const getAvatarColor = (name: string) => {
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
@@ -67,35 +72,48 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     }`}>
       {/* Tabs Header */}
       <div className="flex bg-bg-main/30 border-b border-border-main/50 p-2.5 space-x-1.5 items-center justify-between">
-        <div className="flex space-x-1 flex-1">
+        <div className="flex space-x-1.5 overflow-x-auto no-scrollbar flex-1">
           <button
             onClick={() => setActiveTab('chat')}
-            className={`px-3.5 py-2 rounded-xl text-[11px] font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center space-x-1.5 transition-all cursor-pointer flex-shrink-0 ${
               activeTab === 'chat'
                 ? 'bg-primary-light text-primary border border-primary/20'
-                : 'text-text-muted hover:text-text-main hover:bg-bg-surface/30'
+                : 'text-text-muted hover:text-text-main hover:bg-bg-surface/30 border border-transparent'
             }`}
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-3 h-3" />
             <span>Chat ({messages.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('watchers')}
-            className={`px-3.5 py-2 rounded-xl text-[11px] font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center space-x-1.5 transition-all cursor-pointer flex-shrink-0 ${
               activeTab === 'watchers'
                 ? 'bg-accent/15 text-accent border border-accent/20'
-                : 'text-text-muted hover:text-text-main hover:bg-bg-surface/30'
+                : 'text-text-muted hover:text-text-main hover:bg-bg-surface/30 border border-transparent'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-3 h-3" />
             <span>Watchers ({users.length})</span>
           </button>
+          {isHost && (
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center space-x-1.5 transition-all cursor-pointer flex-shrink-0 ${
+                activeTab === 'requests'
+                  ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                  : 'text-text-muted hover:text-text-main hover:bg-bg-surface/30 border border-transparent'
+              }`}
+            >
+              <UserCheck className="w-3 h-3" />
+              <span>Requests ({pendingApprovals.length})</span>
+            </button>
+          )}
         </div>
         
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg border border-border-main/60 hover:bg-bg-surface hover:text-primary transition-all text-text-muted cursor-pointer text-[10px]"
+            className="p-1.5 rounded-lg border border-border-main/60 hover:bg-bg-surface hover:text-primary transition-all text-text-muted cursor-pointer text-[10px] flex-shrink-0"
           >
             Close
           </button>
@@ -168,6 +186,50 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
               })
             )}
             <div ref={chatEndRef} />
+          </div>
+        ) : activeTab === 'requests' && isHost ? (
+          <div className="space-y-2">
+            <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3 px-1">
+              Pending Join Requests
+            </h4>
+            {pendingApprovals.length === 0 ? (
+              <div className="text-center py-12 text-[11px] text-text-muted">
+                No pending access requests.
+              </div>
+            ) : (
+              pendingApprovals.map((req) => (
+                <div
+                  key={req.socketId}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-bg-card/30 border border-border-main/40 hover:border-border-active transition-all"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white"
+                      style={{ backgroundColor: getAvatarColor(req.username) }}
+                    >
+                      {getInitials(req.username)}
+                    </div>
+                    <span className="text-xs font-semibold text-text-main">
+                      {req.username}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => onApproveViewer && onApproveViewer(req.socketId, false)}
+                      className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold transition-all cursor-pointer"
+                    >
+                      Deny
+                    </button>
+                    <button
+                      onClick={() => onApproveViewer && onApproveViewer(req.socketId, true)}
+                      className="px-2.5 py-1 rounded bg-primary hover:bg-primary-hover text-black text-[10px] font-semibold transition-all cursor-pointer"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <div className="space-y-2">

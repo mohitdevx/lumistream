@@ -326,6 +326,7 @@ interface RoomState {
   hostSocketId: string | null;
   users: Array<{ socketId: string; username: string }>;
   pendingApprovals: Array<{ socketId: string; username: string }>;
+  approvedUsernames?: Set<string>; // Persistent approval register
   emptyTimeoutId?: NodeJS.Timeout;
 }
 const activeRooms = new Map<string, RoomState>();
@@ -601,6 +602,10 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
 io.on('connection', (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
   
+  socket.onAny((event, ...args) => {
+    console.log(`[Socket debug] Event '${event}' from ${socket.id}:`, JSON.stringify(args));
+  });
+  
   // Send list of active transcodes on connection
   socket.emit('active-transcodes', Array.from(activeTranscodes.values()));
 
@@ -614,12 +619,33 @@ io.on('connection', (socket) => {
       // Verify if room exists in DB
       const room = await prisma.room.findUnique({
         where: { id: roomId },
-        include: { video: true }
+        include: { 
+          video: {
+            include: {
+              user: true
+            }
+          }
+        }
       });
 
       if (!room) {
         socket.emit('error', 'Room not found');
         return;
+      }
+
+      const uploaderUsername = room.video.user?.username;
+      const uploaderEmail = room.video.user?.email;
+      let isHost = false;
+
+      if (uploaderUsername || uploaderEmail) {
+        isHost = (username === uploaderUsername) || (username === uploaderEmail);
+      } else {
+        // Fallback: first user to join becomes host if uploader is unknown
+        if (!activeRooms.has(roomId)) {
+          isHost = true;
+        } else {
+          isHost = activeRooms.get(roomId)?.hostSocketId === socket.id;
+        }
       }
 
       // Initialize or update room state
@@ -628,9 +654,10 @@ io.on('connection', (socket) => {
           currentTime: 0,
           isPlaying: false,
           lastUpdated: Date.now(),
-          hostSocketId: socket.id, // The creator or first person joining becomes the initial host
+          hostSocketId: isHost ? socket.id : null,
           users: [],
-          pendingApprovals: []
+          pendingApprovals: [],
+          approvedUsernames: new Set<string>()
         });
       }
 
@@ -647,24 +674,35 @@ io.on('connection', (socket) => {
         roomState.pendingApprovals = [];
       }
       
-      // Assign host if none exists
-      if (!roomState.hostSocketId) {
+      // Assign host if this user is host
+      if (isHost) {
         roomState.hostSocketId = socket.id;
       }
 
-      const isHost = roomState.hostSocketId === socket.id;
+      // Initialize approvedUsernames Set if undefined
+      if (!roomState.approvedUsernames) {
+        roomState.approvedUsernames = new Set<string>();
+      }
+
+      // Check if user has already been approved previously
+      const isApprovedBefore = roomState.approvedUsernames.has(username);
 
       // Check private room entry admission
-      if (!room.isPublic && !isHost) {
+      if (!room.isPublic && !isHost && !isApprovedBefore) {
         if (!roomState.pendingApprovals.some(p => p.socketId === socket.id)) {
           roomState.pendingApprovals.push({ socketId: socket.id, username });
         }
 
-        // Notify Host
-        io.to(roomState.hostSocketId).emit('watch-request', {
-          socketId: socket.id,
-          username
-        });
+        // Notify Host if online
+        if (roomState.hostSocketId) {
+          io.to(roomState.hostSocketId).emit('watch-request', {
+            socketId: socket.id,
+            username
+          });
+
+          // Also sync the host's requests tab instantly
+          io.to(roomState.hostSocketId).emit('watch-requests-list', roomState.pendingApprovals);
+        }
 
         // Notify viewer
         socket.emit('approval-pending', { message: 'Waiting for Host approval...' });
@@ -699,7 +737,8 @@ io.on('connection', (socket) => {
         currentTime: roomState.currentTime,
         isPlaying: roomState.isPlaying,
         isHost,
-        users: roomState.users
+        users: roomState.users,
+        pendingApprovals: isHost ? (roomState.pendingApprovals || []) : []
       });
 
       // Notify all other clients of updated user list
@@ -725,9 +764,18 @@ io.on('connection', (socket) => {
     const viewer = roomState.pendingApprovals[index];
     roomState.pendingApprovals.splice(index, 1);
 
+    // Sync updated pending request list to the host immediately
+    socket.emit('watch-requests-list', roomState.pendingApprovals);
+
     const viewerSocket = io.sockets.sockets.get(viewerSocketId);
 
     if (approved) {
+      // Add viewer's username to the persistent approval list
+      if (!roomState.approvedUsernames) {
+        roomState.approvedUsernames = new Set<string>();
+      }
+      roomState.approvedUsernames.add(viewer.username);
+
       if (!roomState.users.some(u => u.socketId === viewerSocketId)) {
         roomState.users.push(viewer);
       }
@@ -861,6 +909,7 @@ io.on('connection', (socket) => {
           roomState.pendingApprovals.splice(index, 1);
           if (roomState.hostSocketId) {
             io.to(roomState.hostSocketId).emit('watch-request-cancelled', { socketId: socket.id });
+            io.to(roomState.hostSocketId).emit('watch-requests-list', roomState.pendingApprovals);
           }
         }
       }

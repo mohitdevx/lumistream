@@ -8,6 +8,7 @@ export interface Video {
   thumbnailPath?: string;
   duration?: number;
   createdAt: string;
+  userId?: string;
 }
 
 export interface Room {

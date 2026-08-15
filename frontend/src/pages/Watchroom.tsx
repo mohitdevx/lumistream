@@ -16,6 +16,9 @@ export const Watchroom: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showEndStreamConfirm, setShowEndStreamConfirm] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected'>('idle');
+  const [approvalMessage, setApprovalMessage] = useState('Waiting for Host approval...');
+  const [pendingApprovals, setPendingApprovals] = useState<{ socketId: string; username: string }[]>([]);
 
   // Username overlay input state
   const [username, setUsername] = useState(() => {
@@ -98,6 +101,25 @@ export const Watchroom: React.FC = () => {
         const data = await api.getRoomDetails(roomId);
         setRoom(data);
         
+        // Determine initial approval status
+        const userJson = localStorage.getItem('user');
+        let isLocalHost = false;
+        if (userJson) {
+          try {
+            const u = JSON.parse(userJson);
+            if (u && u.id && data.video && data.video.userId === u.id) {
+              isLocalHost = true;
+              setIsHost(true);
+            }
+          } catch {}
+        }
+
+        if (data.isPublic || isLocalHost) {
+          setApprovalStatus('approved');
+        } else {
+          setApprovalStatus('pending');
+        }
+        
         // Fetch last 50 chat messages from DB
         const history = await api.getRoomMessages(roomId);
         setMessages(history);
@@ -111,36 +133,96 @@ export const Watchroom: React.FC = () => {
     fetchRoom();
   }, [roomId]);
 
-  // 2. Setup WebSocket Connection once Username & Room are ready
+  // 2. Disconnect socket only when component unmounts
   useEffect(() => {
-    if (!isUsernameSet || !room || !roomId) return;
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
-    // Connect to WS server
-    socket.connect();
+  // 3. Setup WebSocket Connection once Username & Room are ready
+  useEffect(() => {
+    if (!isUsernameSet || !room || !roomId || !username) return;
+
+    // Connect to WS server if not already connected
+    if (!socket.connected) {
+      socket.connect();
+    }
 
     // Emit join event
     socket.emit('join-room', { roomId, username });
 
     // WS Event Listeners
-    socket.on('room-state', (state: { currentTime: number; isPlaying: boolean; isHost: boolean; users: any }) => {
+    socket.on('room-state', (state: { currentTime: number; isPlaying: boolean; isHost: boolean; users: any; pendingApprovals?: any[] }) => {
+      setApprovalStatus('approved');
       setIsHost(state.isHost);
       setUsers(state.users);
-
-      // Align player to current room time
-      setTimeout(() => {
-        if (playerControlRef.current) {
-          playerControlRef.current.seekTo(state.currentTime);
-          if (state.isPlaying) {
-            playerControlRef.current.play();
-          } else {
-            playerControlRef.current.pause();
-          }
+      if (state.pendingApprovals) {
+        setPendingApprovals(state.pendingApprovals);
+      }
+      
+      // Sync player time & state if player is ready
+      if (playerControlRef.current) {
+        const player = playerControlRef.current;
+        player.seekTo(state.currentTime);
+        if (state.isPlaying) {
+          player.play();
+        } else {
+          player.pause();
         }
-      }, 800);
+      }
     });
 
-    socket.on('room-users', (activeUsers: Array<{ socketId: string; username: string }>) => {
-      setUsers(activeUsers);
+    socket.on('room-users', (updatedUsers: Array<{ socketId: string; username: string }>) => {
+      setUsers(updatedUsers);
+    });
+
+    // Listen for private room pending approval
+    socket.on('approval-pending', ({ message }: { message: string }) => {
+      setApprovalStatus('pending');
+      setApprovalMessage(message);
+    });
+
+    // Listen for private room join approved
+    socket.on('join-approved', (state: { currentTime: number; isPlaying: boolean; isHost: boolean; users: any }) => {
+      setApprovalStatus('approved');
+      setIsHost(state.isHost);
+      setUsers(state.users);
+      
+      // Sync player time & state if player is ready
+      if (playerControlRef.current) {
+        const player = playerControlRef.current;
+        player.seekTo(state.currentTime);
+        if (state.isPlaying) {
+          player.play();
+        } else {
+          player.pause();
+        }
+      }
+    });
+
+    // Listen for private room join rejected
+    socket.on('join-rejected', ({ message }: { message: string }) => {
+      setApprovalStatus('rejected');
+      setApprovalMessage(message);
+    });
+
+    // Listen for watch-request (Host only)
+    socket.on('watch-request', (data: { socketId: string; username: string }) => {
+      setPendingApprovals(prev => {
+        if (prev.some(p => p.socketId === data.socketId)) return prev;
+        return [...prev, data];
+      });
+    });
+
+    // Listen for watch-request-cancelled (Host only)
+    socket.on('watch-request-cancelled', ({ socketId }: { socketId: string }) => {
+      setPendingApprovals(prev => prev.filter(p => p.socketId !== socketId));
+    });
+
+    // Listen for watch-requests-list updates (Host only)
+    socket.on('watch-requests-list', (list: Array<{ socketId: string; username: string }>) => {
+      setPendingApprovals(list);
     });
 
     socket.on('host-status', ({ isHost: hostStatus }: { isHost: boolean }) => {
@@ -217,9 +299,14 @@ export const Watchroom: React.FC = () => {
       socket.off('player-sync');
       socket.off('new-message');
       socket.off('stream-ended');
-      socket.disconnect();
+      socket.off('approval-pending');
+      socket.off('join-approved');
+      socket.off('join-rejected');
+      socket.off('watch-request');
+      socket.off('watch-request-cancelled');
+      socket.off('watch-requests-list');
     };
-  }, [isUsernameSet, room, roomId, username]);
+  }, [isUsernameSet, room, roomId, username, isHost]);
 
   // 3. Periodic Host sync emitter
   useEffect(() => {
@@ -371,6 +458,51 @@ export const Watchroom: React.FC = () => {
     );
   }
 
+  // Access approval status overlay
+  if (approvalStatus === 'pending') {
+    return (
+      <div className="max-w-md mx-auto py-20">
+        <div className="bg-bg-surface border border-border-main rounded-xl p-8 shadow-2xl text-center space-y-6">
+          <div className="flex justify-center">
+            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-md font-bold text-text-main">Awaiting Admission</h2>
+            <p className="text-xs text-text-muted">{approvalMessage}</p>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full py-2.5 rounded-lg border border-border-main hover:bg-border-main/30 text-text-muted hover:text-text-main text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Cancel and Return Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (approvalStatus === 'rejected') {
+    return (
+      <div className="max-w-md mx-auto py-20">
+        <div className="bg-bg-surface border border-border-main rounded-xl p-8 shadow-2xl text-center space-y-6">
+          <div className="flex justify-center">
+            <ShieldAlert className="w-12 h-12 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-md font-bold text-text-main">Admission Declined</h2>
+            <p className="text-xs text-text-muted">{approvalMessage}</p>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-bg-main text-xs font-bold transition-all cursor-pointer"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`mx-auto w-full transition-all duration-500 ease-in-out ${isFullscreen ? '' : (showChat ? 'max-w-7xl' : 'max-w-5xl')} space-y-6`}>
       {/* Top Banner Control bar */}
@@ -509,6 +641,9 @@ export const Watchroom: React.FC = () => {
               onSendMessage={handleSendMessage}
               onClose={isFullscreen ? handleToggleChat : undefined}
               isFullscreen={isFullscreen}
+              isHost={isHost}
+              pendingApprovals={pendingApprovals}
+              onApproveViewer={(viewerSocketId, approved) => socket.emit('approve-viewer', { roomId, viewerSocketId, approved })}
             />
           </div>
         </div>
