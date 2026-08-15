@@ -338,7 +338,7 @@ export const Watchroom: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`mx-auto w-full transition-all duration-500 ease-in-out ${isFullscreen ? '' : (showChat ? 'max-w-7xl' : 'max-w-5xl')} space-y-6`}>
       {/* Top Banner Control bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-main/50 pb-4">
         <div className="flex items-center space-x-3 text-left">
@@ -389,17 +389,17 @@ export const Watchroom: React.FC = () => {
       {/* Watchroom Workspace Wrapper */}
       <div
         ref={workspaceRef}
-        className={`w-full overflow-hidden transition-all duration-300 ${
+        className={`w-full overflow-hidden transition-all duration-500 ease-in-out ${
           isFullscreen
             ? 'fixed inset-0 z-50 bg-black flex flex-col md:flex-row'
-            : 'grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch'
+            : 'flex flex-col lg:flex-row items-stretch'
         }`}
       >
         {/* Left Side: Video Player */}
-        <div className={`transition-all duration-300 ${
+        <div className={`transition-all duration-500 ease-in-out ${
           isFullscreen
             ? 'flex-1 h-full relative'
-            : 'lg:col-span-2 space-y-4'
+            : 'flex-1 min-w-0 space-y-4'
         }`}>
           <VideoPlayer
             src={room.video.hlsPath}
@@ -448,24 +448,26 @@ export const Watchroom: React.FC = () => {
         </div>
 
         {/* Right Side: Chat System */}
-        {showChat && (
-          <div className={`transition-all duration-300 ${
-            isFullscreen
-              ? 'absolute top-0 right-0 h-full w-80 sm:w-96 z-30'
-              : 'relative h-full min-h-[500px]'
-          }`}>
-            <div className={isFullscreen ? 'h-full w-full' : 'absolute inset-0 flex flex-col'}>
-              <ChatBox
-                messages={messages}
-                users={users}
-                username={username}
-                onSendMessage={handleSendMessage}
-                onClose={isFullscreen ? handleToggleChat : undefined}
-                isFullscreen={isFullscreen}
-              />
-            </div>
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden ${
+          isFullscreen
+            ? showChat
+              ? 'absolute top-0 right-0 h-full w-80 sm:w-96 z-30 opacity-100'
+              : 'absolute top-0 right-0 h-full w-0 z-30 opacity-0 pointer-events-none'
+            : showChat
+              ? 'relative w-full lg:w-[400px] min-h-[500px] opacity-100 lg:ml-6'
+              : 'relative w-0 lg:w-0 min-h-0 h-0 lg:h-auto opacity-0 lg:ml-0 pointer-events-none'
+        }`}>
+          <div className={isFullscreen ? 'h-full w-full' : 'absolute inset-0 flex flex-col'}>
+            <ChatBox
+              messages={messages}
+              users={users}
+              username={username}
+              onSendMessage={handleSendMessage}
+              onClose={isFullscreen ? handleToggleChat : undefined}
+              isFullscreen={isFullscreen}
+            />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
