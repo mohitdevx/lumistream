@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Film, Compass, Info, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Film, Compass, Info, Loader2, ArrowRight, RotateCw } from 'lucide-react';
 import { api, Room, Video } from '../utils/api';
 import { RoomCard } from '../components/RoomCard';
 
@@ -21,7 +21,7 @@ export const Dashboard: React.FC = () => {
   const [submittingRoom, setSubmittingRoom] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchRooms = async () => {
     try {
       setLoadingRooms(true);
       const activeRooms = await api.getRooms();
@@ -31,13 +31,14 @@ export const Dashboard: React.FC = () => {
     } finally {
       setLoadingRooms(false);
     }
+  };
 
+  const fetchVideos = async () => {
     try {
       setLoadingVideos(true);
-      // Fetch all videos, even those that are processing, so users know upload status
-      // We will do a direct call to list all, but our API filters processing,
-      // Let's call the API to get videos
-      const readyVideos = await api.getVideos();
+      const userJson = localStorage.getItem('user');
+      const user = userJson ? JSON.parse(userJson) : null;
+      const readyVideos = await api.getVideos(user?.id);
       setVideos(readyVideos);
     } catch (err) {
       console.error('Failed fetching videos:', err);
@@ -46,11 +47,13 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchDashboardData = () => {
+    fetchRooms();
+    fetchVideos();
+  };
+
   useEffect(() => {
     fetchDashboardData();
-    // Poll active rooms every 10 seconds to keep counts fresh
-    const interval = setInterval(fetchDashboardData, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
@@ -122,118 +125,137 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Main Grid: Active Rooms & Video Inventory */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
         
-        {/* Left 2 Columns: Active Watchrooms */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between border-b border-border-main/50 pb-4">
-            <h2 className="text-lg font-bold flex items-center space-x-2">
-              <Compass className="w-5 h-5 text-primary" />
-              <span>Live Public Screening Rooms</span>
-            </h2>
-            <button 
-              onClick={fetchDashboardData}
-              className="text-xs text-primary hover:text-primary-hover font-semibold transition-colors"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {loadingRooms ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            </div>
-          ) : rooms.length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-border-main rounded-xl bg-bg-surface/30">
-              <Film className="w-12 h-12 text-text-muted mx-auto mb-4" />
-              <h3 className="text-sm font-bold text-text-main">No Live Rooms Found</h3>
-              <p className="text-xs text-text-muted mt-1.5 max-w-xs mx-auto">
-                No one is hosting a public show right now. Be the first to start a screening room!
-              </p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-4 inline-flex items-center space-x-1 px-4 py-2 rounded-lg bg-primary/15 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer"
+        {/* Left 2 Columns: Active Watchrooms Card */}
+        <div className="lg:col-span-2 bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-6 flex flex-col justify-between h-full space-y-6 text-left">
+          <div className="space-y-6 flex-1 flex flex-col">
+            <div className="flex items-center justify-between border-b border-border-main/50 pb-4">
+              <h2 className="text-md font-semibold flex items-center space-x-2 text-white">
+                <Compass className="w-4 h-4 text-primary" />
+                <span>Live Public Screening Rooms</span>
+              </h2>
+              <button 
+                onClick={fetchRooms}
+                disabled={loadingRooms}
+                className="flex items-center space-x-1.5 text-xs text-primary hover:text-primary-hover disabled:text-zinc-600 font-semibold transition-colors cursor-pointer"
               >
-                <span>Create a room</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <RotateCw className={`w-3.5 h-3.5 ${loadingRooms ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {rooms.map((room) => (
-                <RoomCard key={room.id} room={room} />
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Right 1 Column: Video Inventory */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-border-main/50 pb-4">
-            <h2 className="text-lg font-bold flex items-center space-x-2">
-              <Film className="w-5 h-5 text-accent" />
-              <span>Uploaded Movies</span>
-            </h2>
-            <button 
-              onClick={() => navigate('/upload')}
-              className="text-xs text-accent hover:text-accent-hover font-semibold transition-colors"
-            >
-              + Upload New
-            </button>
-          </div>
-
-          {loadingVideos ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 text-accent animate-spin" />
-            </div>
-          ) : videos.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-border-main rounded-xl bg-bg-surface/30">
-              <Info className="w-8 h-8 text-text-muted mx-auto mb-3" />
-              <h3 className="text-xs font-bold text-text-main">No Movies Uploaded</h3>
-              <p className="text-[11px] text-text-muted mt-1 max-w-[200px] mx-auto">
-                You need to upload a movie file before hosting a screening.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-              {videos.map((vid) => (
-                <div
-                  key={vid.id}
-                  className="p-3 rounded-lg bg-bg-surface border border-border-main hover:border-border-active flex items-center space-x-3 transition-all"
-                >
-                  <div className="w-16 aspect-video bg-zinc-950 rounded overflow-hidden flex-shrink-0 relative border border-border-main/50">
-                    {vid.thumbnailPath && vid.thumbnailPath !== 'processing' ? (
-                      <img
-                        src={vid.thumbnailPath.startsWith('http') ? vid.thumbnailPath : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${vid.thumbnailPath}`}
-                        alt={vid.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] text-text-muted font-bold">
-                        HLS
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs font-semibold text-text-main truncate">{vid.title}</h4>
-                    <p className="text-[10px] text-text-muted mt-1 truncate">
-                      {vid.duration ? `${Math.round(vid.duration / 60)} min` : 'Duration unknown'}
-                    </p>
-                  </div>
+            {/* Rooms content */}
+            <div className="flex-1 flex flex-col justify-start">
+              {loadingRooms ? (
+                <div className="flex items-center justify-center h-[500px] flex-1">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                </div>
+              ) : rooms.length === 0 ? (
+                <div className="text-center h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex-1 flex flex-col items-center justify-center">
+                  <Film className="w-10 h-10 text-text-muted mb-3" />
+                  <h3 className="text-xs font-semibold text-text-main">No Live Rooms Found</h3>
+                  <p className="text-[11px] text-text-muted mt-1.5 max-w-xs mx-auto">
+                    No one is hosting a public show right now. Be the first to start a screening room!
+                  </p>
                   <button
-                    onClick={() => {
-                      setSelectedVideoId(vid.id);
-                      setRoomTitle(`Let's watch ${vid.title}`);
-                      setShowCreateModal(true);
-                    }}
-                    className="p-1.5 rounded-md bg-primary-light hover:bg-primary text-primary hover:text-bg-main text-[10px] font-bold transition-all cursor-pointer"
+                    onClick={() => setShowCreateModal(true)}
+                    className="mt-4 inline-flex items-center space-x-1 px-3.5 py-2 rounded-lg bg-primary-light hover:bg-primary/20 text-primary text-xs font-semibold transition-all cursor-pointer"
                   >
-                    Host
+                    <span>Create a room</span>
+                    <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
-              ))}
+              ) : (
+                <div className="h-[500px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {rooms.map((room) => (
+                      <RoomCard key={room.id} room={room} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Right 1 Column: Video Inventory Card */}
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-6 flex flex-col justify-between h-full space-y-6 text-left">
+          <div className="space-y-6 flex-1 flex flex-col">
+            <div className="flex items-center justify-between border-b border-border-main/50 pb-4">
+              <h2 className="text-md font-semibold flex items-center space-x-2 text-white">
+                <Film className="w-4 h-4 text-accent" />
+                <span>Uploaded Movies</span>
+              </h2>
+              <div className="flex items-center">
+                <button 
+                  onClick={fetchVideos}
+                  disabled={loadingVideos}
+                  className="flex items-center space-x-1 text-xs text-accent hover:text-accent-hover disabled:text-zinc-600 font-semibold transition-colors cursor-pointer"
+                  title="Refresh Uploaded Movies"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${loadingVideos ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Videos content */}
+            <div className="flex-1 flex flex-col justify-start">
+              {loadingVideos ? (
+                <div className="flex items-center justify-center h-[500px] flex-1">
+                  <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                </div>
+              ) : videos.length === 0 ? (
+                <div className="text-center h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex-1 flex flex-col items-center justify-center">
+                  <Info className="w-8 h-8 text-text-muted mx-auto mb-3" />
+                  <h3 className="text-xs font-semibold text-text-main">No Movies Uploaded</h3>
+                  <p className="text-[11px] text-text-muted mt-1 max-w-[200px] mx-auto">
+                    You need to upload a movie file before hosting a screening.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 h-[500px] overflow-y-auto pr-1">
+                  {videos.map((vid) => (
+                    <div
+                      key={vid.id}
+                      className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 hover:border-zinc-700 flex items-center space-x-3 transition-all"
+                    >
+                      <div className="w-16 aspect-video bg-zinc-900 rounded overflow-hidden flex-shrink-0 relative border border-border-main/50">
+                        {vid.thumbnailPath && vid.thumbnailPath !== 'processing' ? (
+                          <img
+                            src={vid.thumbnailPath.startsWith('http') ? vid.thumbnailPath : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${vid.thumbnailPath}`}
+                            alt={vid.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-text-muted font-bold">
+                            HLS
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <h4 className="text-xs font-semibold text-text-main truncate">{vid.title}</h4>
+                        <p className="text-[10px] text-text-muted mt-1 truncate">
+                          {vid.duration ? `${Math.round(vid.duration / 60)} min` : 'Duration unknown'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedVideoId(vid.id);
+                          setRoomTitle(`Let's watch ${vid.title}`);
+                          setShowCreateModal(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-black text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        Host
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

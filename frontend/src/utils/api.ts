@@ -30,8 +30,9 @@ export interface ChatMessage {
 }
 
 export const api = {
-  getVideos: async (): Promise<Video[]> => {
-    const res = await fetch(`${API_URL}/api/videos`);
+  getVideos: async (userId?: string): Promise<Video[]> => {
+    const url = userId ? `${API_URL}/api/videos?userId=${userId}` : `${API_URL}/api/videos`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch videos');
     return res.json();
   },

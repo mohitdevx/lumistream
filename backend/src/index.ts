@@ -326,6 +326,7 @@ interface RoomState {
   hostSocketId: string | null;
   users: Array<{ socketId: string; username: string }>;
   pendingApprovals: Array<{ socketId: string; username: string }>;
+  emptyTimeoutId?: NodeJS.Timeout;
 }
 const activeRooms = new Map<string, RoomState>();
 
@@ -347,7 +348,7 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
       return res.status(400).json({ error: 'No video file uploaded' });
     }
 
-    const { title, description } = req.body;
+    const { title, description, userId } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -363,7 +364,8 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
         title,
         description,
         hlsPath: 'processing',
-        thumbnailPath: 'processing'
+        thumbnailPath: 'processing',
+        userId: userId || null
       }
     });
 
@@ -450,12 +452,14 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
 // 2. List all Videos
 app.get('/api/videos', async (req, res) => {
   try {
-    // Return all videos that have completed transcoding
+    const { userId } = req.query;
+    // Return all videos that have completed transcoding, optionally scoped to uploader
     const videos = await prisma.video.findMany({
       where: {
         NOT: {
           hlsPath: 'processing'
-        }
+        },
+        ...(userId ? { userId: userId as string } : {})
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -598,6 +602,14 @@ io.on('connection', (socket) => {
       }
 
       const roomState = activeRooms.get(roomId)!;
+      
+      // If there's an active empty auto-deletion timeout, clear it!
+      if (roomState.emptyTimeoutId) {
+        clearTimeout(roomState.emptyTimeoutId);
+        delete roomState.emptyTimeoutId;
+        console.log(`[Socket] Room ${roomId} is active again. Cleared auto-deletion timeout.`);
+      }
+
       if (!roomState.pendingApprovals) {
         roomState.pendingApprovals = [];
       }
@@ -820,10 +832,22 @@ io.on('connection', (socket) => {
         }
       }
 
-      // If room is empty, we can clean up after a timeout or keep it
+      // If room is empty, start 5-minute auto-deletion countdown
       if (roomState.users.length === 0) {
-        activeRooms.delete(currentRoomId);
-        console.log(`[Socket] Room ${currentRoomId} is now empty. Cleaned up state.`);
+        const rId = currentRoomId;
+        console.log(`[Socket] Room ${rId} is now empty. Starting 5-minute auto-deletion timer.`);
+        
+        roomState.emptyTimeoutId = setTimeout(async () => {
+          try {
+            console.log(`[Server] Room ${rId} has been empty for 5 minutes. Deleting from database...`);
+            await prisma.room.delete({
+              where: { id: rId }
+            });
+            activeRooms.delete(rId);
+          } catch (dbErr) {
+            console.error(`[Server] Error auto-deleting empty room ${rId}:`, dbErr);
+          }
+        }, 5 * 60 * 1000); // 5 minutes
       } else {
         // Send updated user list to remaining clients
         io.to(currentRoomId).emit('room-users', roomState.users);

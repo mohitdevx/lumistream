@@ -50,10 +50,17 @@ export const UploadVideo: React.FC = () => {
     setTotalBytes(0);
     setErrorMsg(null);
 
+    const userJson = localStorage.getItem('user');
+    const user = userJson ? JSON.parse(userJson) : null;
+    const userId = user?.id;
+
     const formData = new FormData();
     formData.append('video', file);
     formData.append('title', title);
     formData.append('description', description);
+    if (userId) {
+      formData.append('userId', userId);
+    }
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const xhr = new XMLHttpRequest();
