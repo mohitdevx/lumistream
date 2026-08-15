@@ -301,7 +301,19 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 // Serve uploaded HLS files and thumbnails
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.m3u8')) {
+      res.setHeader('Cache-Control', 'public, max-age=60');
+    } else if (filePath.match(/_\d+\.ts$/)) {
+      // Only cache segmented HLS chunks aggressively (e.g. 480p_001.ts)
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      // Avoid caching headers for old single-file HLS videos (480p.ts, etc.) to keep byte-range requests working
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  }
+}));
 
 // Multer config for file upload
 const storage = multer.diskStorage({
@@ -454,13 +466,18 @@ app.post('/api/videos', upload.single('video'), async (req, res) => {
 app.get('/api/videos', async (req, res) => {
   try {
     const { userId } = req.query;
-    // Return all videos that have completed transcoding, optionally scoped to uploader
+    
+    // Require userId to restrict movies listing to the logged-in owner
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return res.json([]);
+    }
+
     const videos = await prisma.video.findMany({
       where: {
         NOT: {
           hlsPath: 'processing'
         },
-        ...(userId ? { userId: userId as string } : {})
+        userId: userId as string
       },
       orderBy: { createdAt: 'desc' }
     });

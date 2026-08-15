@@ -123,7 +123,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-10">
       {/* Banner / Hero Section */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-bg-surface to-bg-card border border-border-main p-6 md:p-8 flex flex-col md:flex-row items-center justify-between overflow-hidden">
+      <div className="relative rounded-2xl bg-bg-surface border border-border-main p-6 md:p-8 flex flex-col md:flex-row items-center justify-between overflow-hidden">
         <div className="space-y-4 max-w-lg text-left">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
             Watch Movies Together, <span className="text-primary text-glow">Synchronized.</span>
@@ -149,7 +149,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
         <div className="hidden md:block w-72 h-44 bg-zinc-900 border border-border-main rounded-xl overflow-hidden shadow-inner relative flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-accent/10 pointer-events-none" />
+          <div className="absolute inset-0 bg-bg-main/40 pointer-events-none" />
           <Film className="w-16 h-16 text-border-active animate-pulse" />
         </div>
       </div>
@@ -182,7 +182,7 @@ export const Dashboard: React.FC = () => {
                   <Loader2 className="w-6 h-6 text-primary animate-spin" />
                 </div>
               ) : rooms.length === 0 ? (
-                <div className="text-center h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex-1 flex flex-col items-center justify-center">
+                <div className="text-center w-full h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex flex-col items-center justify-center p-6">
                   <Film className="w-10 h-10 text-text-muted mb-3" />
                   <h3 className="text-xs font-semibold text-text-main">No Live Rooms Found</h3>
                   <p className="text-[11px] text-text-muted mt-1.5 max-w-xs mx-auto">
@@ -237,7 +237,7 @@ export const Dashboard: React.FC = () => {
                   <Loader2 className="w-6 h-6 text-accent animate-spin" />
                 </div>
               ) : videos.length === 0 ? (
-                <div className="text-center h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex-1 flex flex-col items-center justify-center">
+                <div className="text-center w-full h-[500px] border border-dashed border-border-main rounded-xl bg-bg-surface/30 flex flex-col items-center justify-center p-6">
                   <Info className="w-8 h-8 text-text-muted mx-auto mb-3" />
                   <h3 className="text-xs font-semibold text-text-main">No Movies Uploaded</h3>
                   <p className="text-[11px] text-text-muted mt-1 max-w-[200px] mx-auto">
