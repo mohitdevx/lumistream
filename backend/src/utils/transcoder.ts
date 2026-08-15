@@ -80,7 +80,7 @@ export function transcodeToHLS({ videoPath, outputDir, videoId, onProgress }: Tr
           '-hls_flags single_file',
           '-g 48',
           '-sc_threshold 0',
-          '-preset ultrafast',
+          '-preset superfast',
           '-threads 0'
         ]);
 
@@ -98,7 +98,7 @@ export function transcodeToHLS({ videoPath, outputDir, videoId, onProgress }: Tr
           '-hls_flags single_file',
           '-g 48',
           '-sc_threshold 0',
-          '-preset ultrafast',
+          '-preset superfast',
           '-threads 0'
         ]);
 
@@ -116,7 +116,7 @@ export function transcodeToHLS({ videoPath, outputDir, videoId, onProgress }: Tr
           '-hls_flags single_file',
           '-g 48',
           '-sc_threshold 0',
-          '-preset ultrafast',
+          '-preset superfast',
           '-threads 0'
         ]);
 
