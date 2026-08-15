@@ -474,6 +474,39 @@ app.get('/api/videos/transcoding', (req, res) => {
   res.json(Array.from(activeTranscodes.values()));
 });
 
+// 2c. Delete Video
+app.delete('/api/videos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the video first
+    const video = await prisma.video.findUnique({
+      where: { id }
+    });
+
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    // Delete representation files folder from storage
+    const videoDir = path.join(UPLOADS_DIR, id);
+    if (fs.existsSync(videoDir)) {
+      fs.rmSync(videoDir, { recursive: true, force: true });
+      console.log(`[Server] Deleted HLS assets directory: ${videoDir}`);
+    }
+
+    // Delete record from database
+    await prisma.video.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Video deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete video error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // 3. Create a room
 app.post('/api/rooms', async (req, res) => {
   try {

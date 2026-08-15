@@ -49,6 +49,17 @@ export const api = {
     return res.json();
   },
 
+  deleteVideo: async (videoId: string): Promise<{ message: string }> => {
+    const res = await fetch(`${API_URL}/api/videos/${videoId}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to delete video');
+    }
+    return res.json();
+  },
+
   getRooms: async (): Promise<Room[]> => {
     const res = await fetch(`${API_URL}/api/rooms`);
     if (!res.ok) throw new Error('Failed to fetch rooms');

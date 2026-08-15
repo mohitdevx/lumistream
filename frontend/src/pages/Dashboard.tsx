@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Film, Compass, Info, Loader2, ArrowRight, RotateCw } from 'lucide-react';
+import { Plus, Film, Compass, Info, Loader2, ArrowRight, RotateCw, Trash2 } from 'lucide-react';
 import { api, Room, Video } from '../utils/api';
 import { RoomCard } from '../components/RoomCard';
+import { useUI } from '../context/UIContext';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { showToast } = useUI();
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -17,9 +19,15 @@ export const Dashboard: React.FC = () => {
   const [roomTitle, setRoomTitle] = useState('');
   const [roomDesc, setRoomDesc] = useState('');
   const [selectedVideoId, setSelectedVideoId] = useState('');
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(false); // private by default
+  const [showDropdown, setShowDropdown] = useState(false);
   const [submittingRoom, setSubmittingRoom] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // Video delete confirmation state
+  const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchRooms = async () => {
     try {
@@ -55,6 +63,28 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  const handleDeleteVideoClick = (videoId: string) => {
+    setDeletingVideoId(videoId);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDeleteVideo = async () => {
+    if (!deletingVideoId) return;
+    try {
+      setDeleting(true);
+      await api.deleteVideo(deletingVideoId);
+      showToast('Movie deleted successfully.', 'success');
+      setShowDeleteConfirm(false);
+      setDeletingVideoId(null);
+      fetchVideos();
+      fetchRooms(); // refresh active rooms
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete movie.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,16 +270,25 @@ export const Dashboard: React.FC = () => {
                           {vid.duration ? `${Math.round(vid.duration / 60)} min` : 'Duration unknown'}
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedVideoId(vid.id);
-                          setRoomTitle(`Let's watch ${vid.title}`);
-                          setShowCreateModal(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-black text-[10px] font-bold transition-all cursor-pointer"
-                      >
-                        Host
-                      </button>
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setSelectedVideoId(vid.id);
+                            setRoomTitle(`Let's watch ${vid.title}`);
+                            setShowCreateModal(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-black text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          Host
+                        </button>
+                        <button
+                          onClick={() => handleDeleteVideoClick(vid.id)}
+                          className="p-1.5 rounded-lg border border-zinc-800 hover:border-red-500/30 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                          title="Delete Movie"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -298,52 +337,131 @@ export const Dashboard: React.FC = () => {
 
               {/* Room Description */}
               <div className="space-y-1.5 text-left">
-                <label className="text-xs font-semibold text-text-muted">Description (Optional)</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-text-muted">Description (Optional)</label>
+                  <span className="text-[9px] text-text-muted font-mono">{roomDesc.length}/100</span>
+                </div>
                 <textarea
                   placeholder="Tell people what you are screening..."
                   value={roomDesc}
-                  onChange={(e) => setRoomDesc(e.target.value)}
+                  onChange={(e) => setRoomDesc(e.target.value.substring(0, 100))}
+                  maxLength={100}
                   className="w-full bg-bg-main border border-border-main focus:border-primary rounded-lg px-3 py-2 text-xs text-text-main placeholder-text-muted outline-none resize-none h-20 transition-colors"
                 />
               </div>
 
-              {/* Video Selector */}
-              <div className="space-y-1.5 text-left">
+              {/* Custom Movie Selector Dropdown */}
+              <div className="space-y-1.5 text-left relative">
                 <label className="text-xs font-semibold text-text-muted">Select Movie to Host</label>
-                <select
-                  value={selectedVideoId}
-                  onChange={(e) => setSelectedVideoId(e.target.value)}
-                  className="w-full bg-bg-main border border-border-main focus:border-primary rounded-lg px-3 py-2 text-xs text-text-main outline-none transition-colors"
-                  required
-                >
-                  <option value="" disabled>-- Select a Movie --</option>
-                  {videos.map((vid) => (
-                    <option key={vid.id} value={vid.id}>
-                      {vid.title}
-                    </option>
-                  ))}
-                </select>
-                {videos.length === 0 && (
-                  <p className="text-[10px] text-red-400 mt-1">
+                
+                {videos.length === 0 ? (
+                  <p className="text-[10px] text-red-400">
                     No videos available. Please upload a video first.
                   </p>
+                ) : (
+                  <div>
+                    {/* Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowDropdown(!showDropdown)}
+                      className="w-full flex items-center justify-between bg-bg-main border border-border-main hover:border-border-active rounded-lg px-3 py-2 text-xs text-text-main outline-none transition-colors cursor-pointer text-left"
+                    >
+                      {selectedVideoId ? (
+                        (() => {
+                          const selectedVid = videos.find(v => v.id === selectedVideoId);
+                          return selectedVid ? (
+                            <div className="flex items-center space-x-2.5">
+                              <div className="w-10 aspect-video bg-zinc-900 rounded overflow-hidden flex-shrink-0 border border-border-main/40">
+                                {selectedVid.thumbnailPath && selectedVid.thumbnailPath !== 'processing' ? (
+                                  <img
+                                    src={selectedVid.thumbnailPath.startsWith('http') ? selectedVid.thumbnailPath : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${selectedVid.thumbnailPath}`}
+                                    alt={selectedVid.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[8px] text-text-muted font-bold">
+                                    HLS
+                                  </div>
+                                )}
+                              </div>
+                              <span className="font-medium truncate">{selectedVid.title}</span>
+                            </div>
+                          ) : (
+                            <span className="text-text-muted">Select a Movie</span>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-text-muted">Select a Movie</span>
+                      )}
+                      <span className="text-text-muted text-[10px] ml-2">▼</span>
+                    </button>
+
+                    {/* Expanded Options List */}
+                    {showDropdown && (
+                      <div className="absolute left-0 right-0 mt-1 z-[60] max-h-48 overflow-y-auto bg-zinc-900 border border-border-main rounded-lg shadow-xl p-1 space-y-0.5">
+                        {videos.map((vid) => (
+                          <button
+                            key={vid.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVideoId(vid.id);
+                              setRoomTitle(`Let's watch ${vid.title}`);
+                              setShowDropdown(false);
+                            }}
+                            className={`w-full flex items-center space-x-2.5 p-2 rounded-md hover:bg-zinc-800 text-left transition-colors cursor-pointer ${
+                              selectedVideoId === vid.id ? 'bg-zinc-850 border border-border-active' : 'border border-transparent'
+                            }`}
+                          >
+                            <div className="w-10 aspect-video bg-zinc-950 rounded overflow-hidden flex-shrink-0 border border-border-main/50">
+                              {vid.thumbnailPath && vid.thumbnailPath !== 'processing' ? (
+                                <img
+                                  src={vid.thumbnailPath.startsWith('http') ? vid.thumbnailPath : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${vid.thumbnailPath}`}
+                                  alt={vid.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[8px] text-text-muted font-bold">
+                                  HLS
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-text-main truncate">{vid.title}</p>
+                              <p className="text-[9px] text-text-muted mt-0.5">
+                                {vid.duration ? `${Math.round(vid.duration / 60)} min` : 'Duration unknown'}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Public/Private Room Setting */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-bg-main/50 border border-border-main/30">
+              {/* Public/Private Room Setting with Toggle Switch */}
+              <div className="flex items-center justify-between p-3.5 rounded-lg bg-bg-main/50 border border-border-main/30">
                 <div className="text-left">
                   <h4 className="text-xs font-semibold text-text-main">Public Room</h4>
                   <p className="text-[10px] text-text-muted mt-0.5">
                     Visible on dashboard. Anyone can discover and join.
                   </p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
-                  className="w-4 h-4 accent-primary rounded cursor-pointer"
-                />
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(!isPublic)}
+                  className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-250 ease-in-out cursor-pointer relative outline-none border ${
+                    isPublic 
+                      ? 'bg-primary border-primary-hover' 
+                      : 'bg-zinc-850 border-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`block w-3.5 h-3.5 rounded-full bg-white transition-transform duration-250 ease-in-out shadow-sm ${
+                      isPublic ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="flex space-x-3 pt-2">
@@ -352,6 +470,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => {
                     setShowCreateModal(false);
                     setModalError(null);
+                    setShowDropdown(false);
                   }}
                   className="flex-1 py-2 px-4 rounded-lg border border-border-main hover:bg-border-main/30 text-xs font-semibold text-text-muted hover:text-text-main transition-colors cursor-pointer"
                 >
@@ -367,6 +486,41 @@ export const Dashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Monochromatic Delete Movie Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in text-left">
+          <div className="relative w-full max-w-sm rounded-xl bg-bg-surface border border-border-main shadow-2xl p-6 space-y-6">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-white">Delete Movie</h3>
+              <p className="text-xs text-zinc-400">
+                Are you sure you want to delete this movie? This will permanently remove all HLS video assets from storage and end any active screening rooms streaming this movie.
+              </p>
+            </div>
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeletingVideoId(null);
+                }}
+                className="flex-1 py-2 px-4 rounded-lg border border-border-main hover:bg-border-main/30 text-xs font-semibold text-text-muted hover:text-text-main transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteVideo}
+                disabled={deleting}
+                className="flex-1 py-2 px-4 rounded-lg bg-red-600 hover:bg-red-750 disabled:bg-red-900/50 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
