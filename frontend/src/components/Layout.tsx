@@ -252,14 +252,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Upload className="w-5 h-5" />
           </Link>
-          <div className="flex items-center space-x-2 bg-bg-main border border-border-main/50 px-2.5 py-1 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center font-bold text-bg-main text-xs">
-              {nameInitials}
-            </div>
+          <Link
+            to="/profile"
+            className="flex items-center space-x-2 bg-bg-main border border-border-main/50 px-2.5 py-1 rounded-lg hover:border-primary/50 transition-colors"
+          >
+            {user?.avatarUrl ? (
+              <img 
+                src={user.avatarUrl} 
+                alt={username} 
+                className="w-6 h-6 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center font-bold text-bg-main text-xs">
+                {nameInitials}
+              </div>
+            )}
             <span className="hidden sm:inline-block text-xs font-semibold text-text-main">
               {username}
             </span>
-          </div>
+          </Link>
           <button
             onClick={handleLogout}
             className="p-2 rounded-lg border border-border-main hover:bg-red-950/20 hover:border-red-500/30 hover:text-red-400 text-text-muted transition-all cursor-pointer"

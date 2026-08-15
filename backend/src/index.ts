@@ -8,10 +8,18 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import { v2 as cloudinary } from 'cloudinary';
 import prisma from './utils/db';
 import { transcodeToHLS } from './utils/transcoder';
 
 dotenv.config();
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -26,7 +34,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Helper to hash password
 function hashPassword(password: string): string {
@@ -85,7 +93,8 @@ app.post('/api/auth/signup', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,
-        email: user.email
+        email: user.email,
+        avatarUrl: user.avatarUrl
       }
     });
   } catch (error: any) {
@@ -136,6 +145,7 @@ app.post('/api/auth/login', async (req, res) => {
         lastName: user.lastName,
         username: user.username,
         email: user.email,
+        avatarUrl: user.avatarUrl,
         bio: user.bio,
         facebook: user.facebook,
         twitter: user.twitter,
@@ -167,6 +177,7 @@ app.get('/api/users/:userId', async (req, res) => {
         lastName: user.lastName,
         username: user.username,
         email: user.email,
+        avatarUrl: user.avatarUrl,
         bio: user.bio,
         facebook: user.facebook,
         twitter: user.twitter,
@@ -185,10 +196,36 @@ app.get('/api/users/:userId', async (req, res) => {
 app.put('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { firstName, lastName, bio, facebook, twitter, github, instagram, website } = req.body;
+    const { firstName, lastName, bio, facebook, twitter, github, instagram, website, avatar } = req.body;
     if (!firstName) {
       return res.status(400).json({ error: 'First name is required' });
     }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let avatarUrl = existingUser.avatarUrl;
+
+    if (avatar) {
+      // Check if it's a new base64 image
+      if (avatar.startsWith('data:image')) {
+        try {
+          const uploadRes = await cloudinary.uploader.upload(avatar, {
+            folder: 'lumistream_avatars',
+            resource_type: 'image'
+          });
+          avatarUrl = uploadRes.secure_url;
+        } catch (uploadErr: any) {
+          console.error('Cloudinary upload error:', uploadErr);
+          return res.status(500).json({ error: uploadErr.message || 'Failed to upload avatar to Cloudinary' });
+        }
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -199,7 +236,8 @@ app.put('/api/users/:userId', async (req, res) => {
         twitter: twitter || null,
         github: github || null,
         instagram: instagram || null,
-        website: website || null
+        website: website || null,
+        avatarUrl
       }
     });
     res.json({
@@ -210,6 +248,7 @@ app.put('/api/users/:userId', async (req, res) => {
         lastName: updated.lastName,
         username: updated.username,
         email: updated.email,
+        avatarUrl: updated.avatarUrl,
         bio: updated.bio,
         facebook: updated.facebook,
         twitter: updated.twitter,
