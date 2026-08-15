@@ -787,6 +787,35 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 4b. End Stream (Host-only)
+  socket.on('end-stream', async ({ roomId }: { roomId: string }) => {
+    try {
+      const roomState = activeRooms.get(roomId);
+      // Validate: only the current room host is allowed to close it
+      if (roomState && roomState.hostSocketId === socket.id) {
+        console.log(`[Socket] Host ended stream in room ${roomId}. Deleting from DB...`);
+        
+        // Clear any pending empty auto-deletion timeouts
+        if (roomState.emptyTimeoutId) {
+          clearTimeout(roomState.emptyTimeoutId);
+        }
+
+        // Notify all clients in the room to leave
+        io.to(roomId).emit('stream-ended', { message: 'The host has ended this screening session.' });
+
+        // Delete room from database (cascades to chat messages)
+        await prisma.room.delete({
+          where: { id: roomId }
+        });
+
+        // Delete from active rooms cache
+        activeRooms.delete(roomId);
+      }
+    } catch (err) {
+      console.error('[Socket] End stream error:', err);
+    }
+  });
+
   // 5. Handle Disconnect
   socket.on('disconnect', () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);

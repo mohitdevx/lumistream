@@ -21,6 +21,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const [transcodeTasks, setTranscodeTasks] = useState<TranscodeTask[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -263,7 +264,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 className="w-6 h-6 rounded-full object-cover"
               />
             ) : (
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center font-bold text-bg-main text-xs">
+              <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300 text-xs">
                 {nameInitials}
               </div>
             )}
@@ -272,7 +273,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </span>
           </Link>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className="p-2 rounded-lg border border-border-main hover:bg-red-950/20 hover:border-red-500/30 hover:text-red-400 text-text-muted transition-all cursor-pointer"
             title="Logout"
           >
@@ -290,6 +291,34 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <footer className="border-t border-border-main/30 py-6 text-center text-xs text-text-muted">
         <p>&copy; {new Date().getFullYear()} LumiStream. Aesthetic Synchronized Video Streaming.</p>
       </footer>
+
+      {/* Monochromatic Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-sm w-full p-6 space-y-6 shadow-2xl animate-scale-up text-left">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-white">Log Out</h3>
+              <p className="text-xs text-zinc-400">Are you sure you want to log out of your LumiStream session?</p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-350 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-750 text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

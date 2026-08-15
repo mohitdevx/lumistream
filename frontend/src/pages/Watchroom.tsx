@@ -1,18 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Share2, Copy, Check, ShieldAlert, Users, Calendar, ArrowLeft } from 'lucide-react';
+import { Loader2, Share2, Copy, Check, ShieldAlert, Users, Calendar, ArrowLeft, XCircle } from 'lucide-react';
 import { api, Room, ChatMessage } from '../utils/api';
 import { socket } from '../utils/socket';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { ChatBox } from '../components/ChatBox';
+import { useUI } from '../context/UIContext';
 
 export const Watchroom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
+  const { showToast } = useUI();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showEndStreamConfirm, setShowEndStreamConfirm] = useState(false);
 
   // Username overlay input state
   const [username, setUsername] = useState(() => {
@@ -190,6 +193,12 @@ export const Watchroom: React.FC = () => {
       setMessages((prev) => [...prev, msg]);
     });
 
+    // Handle stream-ended event
+    socket.on('stream-ended', ({ message }: { message: string }) => {
+      showToast(message, 'info');
+      navigate('/');
+    });
+
     return () => {
       socket.off('room-state');
       socket.off('room-users');
@@ -197,6 +206,7 @@ export const Watchroom: React.FC = () => {
       socket.off('player-control');
       socket.off('player-sync');
       socket.off('new-message');
+      socket.off('stream-ended');
       socket.disconnect();
     };
   }, [isUsernameSet, room, roomId, username]);
@@ -267,6 +277,12 @@ export const Watchroom: React.FC = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // --- End Stream (Host-only) ---
+  const handleEndStream = () => {
+    if (!roomId) return;
+    setShowEndStreamConfirm(true);
   };
 
   // Save username handler
@@ -367,6 +383,15 @@ export const Watchroom: React.FC = () => {
 
         {/* Action Panel */}
         <div className="flex items-center space-x-3 self-start md:self-auto">
+          {isHost && (
+            <button
+              onClick={handleEndStream}
+              className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-750 text-xs font-semibold text-white transition-colors cursor-pointer"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>End Stream</span>
+            </button>
+          )}
           <button
             onClick={copyInviteLink}
             className="flex items-center space-x-1.5 px-4 py-2 rounded-lg border border-border-main hover:border-primary text-xs font-semibold text-text-main hover:text-primary transition-all cursor-pointer bg-bg-surface"
@@ -469,6 +494,39 @@ export const Watchroom: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Monochromatic End Stream Confirmation Modal */}
+      {showEndStreamConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-sm w-full p-6 space-y-6 shadow-2xl animate-scale-up text-left">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-white">End Screening</h3>
+              <p className="text-xs text-zinc-400">
+                Are you sure you want to end this screening room? This will disconnect all viewers and delete the room from the database.
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowEndStreamConfirm(false)}
+                className="flex-1 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-350 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  socket.emit('end-stream', { roomId });
+                  setShowEndStreamConfirm(false);
+                }}
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                End Stream
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
